@@ -1,0 +1,52 @@
+# XcodeGen spec → `xcodegen generate` creates Postwoman.xcodeproj (not committed; regenerate any time).
+name: Postwoman
+options:
+  bundleIdPrefix: com.postwoman
+  deploymentTarget:
+    macOS: "15.0"
+  createIntermediateGroups: true
+  developmentLanguage: en                     # Resources/Localization/*.lproj → 25 interface languages
+settings:
+  base:
+    SWIFT_VERSION: "5.0"                      # the code is written for Swift 5 language mode
+    SWIFT_DEFAULT_ACTOR_ISOLATION: nonisolated # Xcode 26+ templates default to MainActor, which breaks the nonisolated helpers
+    MACOSX_DEPLOYMENT_TARGET: "15.0"
+    MARKETING_VERSION: "0.8"
+    CURRENT_PROJECT_VERSION: "080000"
+targets:
+  Postwoman:
+    type: application
+    platform: macOS
+    sources:
+      - path: Sources
+      - path: Resources
+        excludes:
+          - Info.plist
+          - Postwoman.entitlements
+          - Node.entitlements
+    settings:
+      base:
+        PRODUCT_NAME: Postwoman
+        PRODUCT_BUNDLE_IDENTIFIER: com.postwoman.app   # change to your own reverse-DNS id
+        GENERATE_INFOPLIST_FILE: NO
+        INFOPLIST_FILE: Resources/Info.plist
+        CODE_SIGN_ENTITLEMENTS: Resources/Postwoman.entitlements
+        ASSETCATALOG_COMPILER_APPICON_NAME: AppIcon
+        ENABLE_HARDENED_RUNTIME: YES
+        CODE_SIGN_STYLE: Automatic
+        CODE_SIGN_IDENTITY: "-"                        # "Sign to Run Locally"; set DEVELOPMENT_TEAM for a stable signature
+        DEVELOPMENT_TEAM: ""
+        ARCHS: arm64                                   # the bundled node is arm64 (macOS 27 = Apple Silicon only)
+        ONLY_ACTIVE_ARCH: NO
+        ENABLE_APP_SANDBOX: YES                        # App Sandbox (entitlements in Resources/Postwoman.entitlements)
+        ENABLE_USER_SELECTED_FILES: readwrite
+        ENABLE_OUTGOING_NETWORK_CONNECTIONS: YES
+        ENABLE_USER_SCRIPT_SANDBOXING: NO              # the embed phase below reads Vendor/ and writes into the bundle
+    postBuildScripts:
+      - name: Embed runtime (node + newman)
+        basedOnDependencyAnalysis: false
+        script: |
+          set -euo pipefail
+          IDENT="${EXPANDED_CODE_SIGN_IDENTITY:--}"; [ -z "$IDENT" ] && IDENT="-"
+          /bin/bash "$SRCROOT/scripts/embed-runtime.sh" "$TARGET_BUILD_DIR/$WRAPPER_NAME" "$IDENT"
+          # no re-sealing here: Xcode signs the app itself AFTER this phase (the helper is already signed and gets sealed inside)

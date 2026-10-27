@@ -1,0 +1,13 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+    <!-- Signing entitlements of the bundled Contents/Helpers/node (a child process of the sandboxed app):
+         app-sandbox + inherit = it runs in the SAME sandbox as Postwoman, with the same network and file access. -->
+    <key>com.apple.security.app-sandbox</key><true/>
+    <key>com.apple.security.inherit</key><true/>
+    <!-- Node.js (V8) generates machine code at run time; hardened runtime forbids that without these. -->
+    <key>com.apple.security.cs.allow-jit</key><true/>
+    <key>com.apple.security.cs.allow-unsigned-executable-memory</key><true/>
+</dict>
+</plist>
