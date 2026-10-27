@@ -1,0 +1,14 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+    <!-- App Sandbox: newman and node are bundled, nothing outside the app is launched. -->
+    <key>com.apple.security.app-sandbox</key><true/>
+    <!-- Outgoing connections: the API requests that newman sends. -->
+    <key>com.apple.security.network.client</key><true/>
+    <!-- Folders and files the user picks in open/save panels (storage folder, data lists, import, export). -->
+    <key>com.apple.security.files.user-selected.read-write</key><true/>
+    <!-- Remembers the chosen storage folder between launches (security-scoped bookmark). -->
+    <key>com.apple.security.files.bookmarks.app-scope</key><true/>
+</dict>
+</plist>

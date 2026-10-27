@@ -1,0 +1,40 @@
+# macOS
+.DS_Store
+.AppleDouble
+.LSOverride
+._*
+
+# Xcode (the project is generated from project.yml by XcodeGen)
+*.xcodeproj
+*.xcworkspace
+xcuserdata/
+DerivedData/
+build/
+*.xcuserstate
+*.moved-aside
+*.hmap
+*.ipa
+*.dSYM/
+*.dSYM.zip
+
+# Embedded runtime: created by scripts/update-runtime.sh (about 55 MB).
+# Remove this line if you want to commit Vendor/ so the build works offline.
+#Vendor/
+
+# Packaged app and archives
+*.app
+*.zip
+*.tgz.tmp
+
+# Editors / temp
+.idea/
+.vscode/
+*.swp
+*~
+*.log
+
+# Local data and secrets
+.env
+*.p12
+*.cer
+*.mobileprovision
