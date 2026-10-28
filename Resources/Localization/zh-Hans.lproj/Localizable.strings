@@ -231,3 +231,12 @@
 "Select several: ⇧-click selects a range, ⌘-click adds or removes" = "多选：⇧-点按选择范围，⌘-点按添加或移除";
 "Delete the selected executions in History" = "删除历史记录中所选的执行";
 "Unsaved" = "未存储";
+"Bulk edit" = "批量编辑";
+"Preview" = "预览";
+"Variables" = "变量";
+"Close" = "关闭";
+"Errors CSV" = "错误 CSV";
+"Data rows of failed requests, without duplicates" = "失败请求的数据行（已去重）";
+"%ld row(s), %ld variable(s)" = "%ld 行，%ld 个变量";
+"First %ld rows shown" = "显示前 %ld 行";
+"Row %ld of %ld" = "第 %ld / %ld 行";

@@ -59,6 +59,7 @@ extension Store {
             try? globalsJSON().data().write(to: globalsFile)
             savedGlobals = globalsJSON().compactData()
         }
+        saveOrder()
         log("storage", "Saved collections (\(all ? "all" : explicit.isEmpty ? "autosave" : "\(explicit.count) request(s)"))", .debug)
     }
 
@@ -155,6 +156,80 @@ extension Store {
         return n
     }
 
+    /// What an undo / redo changed in one request: the editor tab to show and the text to select there.
+    struct ChangeTarget { var tab: Int; var script = 0; var text: String?; var range = NSRange(location: 0, length: 0) }
+    private func changedRange(_ old: String, _ new: String) -> NSRange {
+        let a = Array(old.utf16), b = Array(new.utf16)
+        var pre = 0
+        while pre < a.count, pre < b.count, a[pre] == b[pre] { pre += 1 }
+        var suf = 0
+        while suf < a.count - pre, suf < b.count - pre, a[a.count - 1 - suf] == b[b.count - 1 - suf] { suf += 1 }
+        return NSRange(location: pre, length: b.count - pre - suf)
+    }
+    private func diffRequest(old o: Node, new q: Node) -> ChangeTarget? {
+        func text(_ tab: Int, _ script: Int = 0, _ a: String, _ b: String) -> ChangeTarget? {
+            a == b ? nil : ChangeTarget(tab: tab, script: script, text: b.isEmpty ? nil : b, range: changedRange(a, b))
+        }
+        func rows(_ tab: Int, _ a: [KV], _ b: [KV]) -> ChangeTarget? {
+            for i in 0..<max(a.count, b.count) {
+                let x = i < a.count ? a[i] : nil, y = i < b.count ? b[i] : nil
+                if let x, let y {
+                    if x.key != y.key { return ChangeTarget(tab: tab, text: y.key.isEmpty ? nil : y.key, range: changedRange(x.key, y.key)) }
+                    if x.value != y.value { return ChangeTarget(tab: tab, text: y.value.isEmpty ? nil : y.value, range: changedRange(x.value, y.value)) }
+                    if x.enabled != y.enabled { return ChangeTarget(tab: tab) }
+                } else { return ChangeTarget(tab: tab, text: y.map { $0.key.isEmpty ? $0.value : $0.key }, range: NSRange(location: 0, length: 0)) }
+            }
+            return nil
+        }
+        if let t = text(q.uiTab, 0, o.name, q.name) { return t }
+        if o.method != q.method { return ChangeTarget(tab: q.uiTab) }
+        if let t = text(q.uiTab, 0, o.url, q.url) { return t }
+        if let t = rows(0, o.params, q.params) { return t }
+        if let t = rows(1, o.headers, q.headers) { return t }
+        if o.bodyMode != q.bodyMode || o.rawLang != q.rawLang || o.binaryPath != q.binaryPath || o.formData.count != q.formData.count { return ChangeTarget(tab: 2) }
+        if let t = text(2, 0, o.body, q.body) { return t }
+        if let t = rows(2, o.urlencoded, q.urlencoded) { return t }
+        if let t = text(3, 0, o.preScript, q.preScript) { return t }
+        if let t = text(3, 1, o.testScript, q.testScript) { return t }
+        return o.toJSON() != q.toJSON() ? ChangeTarget(tab: q.uiTab) : nil
+    }
+
+    /// After undo / redo: open the request that changed, on the tab with the change, and select the changed text.
+    private func showChange(from oldReq: [String: Node], in newRoots: [Node]) {
+        var found: (Node, ChangeTarget)?
+        search: for r in newRoots { for q in r.requests() {
+            guard let o = oldReq[q.stableID], let t = diffRequest(old: o, new: q) else { continue }
+            found = (q, t); break search
+        } }
+        guard let (q, t) = found else { return }
+        q.uiTab = t.tab; q.uiScriptTab = t.script
+        func openParents(_ n: Node, _ chain: [Node]) -> [Node]? {
+            if n === q { return chain }
+            for c in n.children ?? [] { if let r = openParents(c, chain + [n]) { return r } }
+            return nil
+        }
+        for r in newRoots { if let ps = openParents(r, []) { ps.forEach { expanded.insert($0.id) }; break } }
+        tab = .request; selected = [q]; primary = q
+        objectWillChange.send(); recompute(); scrollID = q.id; scrollTick += 1
+        guard let text = t.text else { return }
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.35) { Self.selectText(text, range: t.range) }
+    }
+    /// Finds the field / editor that shows exactly `text` and selects the range in it.
+    @MainActor private static func selectText(_ text: String, range: NSRange) {
+        guard let win = NSApp.keyWindow, let root = win.contentView else { return }
+        func visit(_ v: NSView) -> NSView? {
+            if let tv = v as? NSTextView, !tv.isFieldEditor, tv.string == text { return tv }
+            if let tf = v as? NSTextField, tf.isEditable, tf.stringValue == text { return tf }
+            for c in v.subviews { if let r = visit(c) { return r } }
+            return nil
+        }
+        guard let v = visit(root) else { return }
+        let len = (text as NSString).length
+        let r = NSRange(location: min(range.location, len), length: min(range.length, max(0, len - range.location)))
+        if let tv = v as? NSTextView { win.makeFirstResponder(tv); tv.setSelectedRange(r); tv.scrollRangeToVisible(r) }
+        else if let tf = v as? NSTextField { win.makeFirstResponder(tf); (tf.currentEditor() as? NSTextView)?.setSelectedRange(r) }
+    }
+
     private func restore(_ d: Data) {
         guard let j = JSON.parse(d) else { return }
         let oldRoots = roots
@@ -186,7 +261,8 @@ extension Store {
         if primary != nil && selected.isEmpty { selected = [primary!] }
         objectWillChange.send(); recompute()
         lastSnap = snapshot()
-        autosaveTick()
+        autosaveTick(); saveOrder()
+        showChange(from: oldReq, in: newRoots)
     }
 
     // MARK: Variables known to the highlighter

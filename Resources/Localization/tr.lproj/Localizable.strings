@@ -231,3 +231,12 @@
 "Select several: ⇧-click selects a range, ⌘-click adds or removes" = "Çoklu seçim: ⇧-tık aralık seçer, ⌘-tık ekler veya çıkarır";
 "Delete the selected executions in History" = "Geçmiş’te seçili çalıştırmaları sil";
 "Unsaved" = "Kaydedilmedi";
+"Bulk edit" = "Toplu düzenle";
+"Preview" = "Önizleme";
+"Variables" = "Değişkenler";
+"Close" = "Kapat";
+"Errors CSV" = "Hata CSV’si";
+"Data rows of failed requests, without duplicates" = "Başarısız isteklerin veri satırları, yinelenenler olmadan";
+"%ld row(s), %ld variable(s)" = "%ld satır, %ld değişken";
+"First %ld rows shown" = "İlk %ld satır gösteriliyor";
+"Row %ld of %ld" = "Satır %ld / %ld";

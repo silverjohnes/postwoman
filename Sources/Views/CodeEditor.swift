@@ -79,6 +79,9 @@ struct CodeEditor: NSViewRepresentable {
 /// (it must not leave full-screen mode). Works on any keyboard layout: the physical "/" key is matched by key code.
 final class CommentTextView: NSTextView {
     var commentable = false
+    override func insertText(_ string: Any, replacementRange: NSRange) {
+        if !surroundSelection(of: self, with: string) { super.insertText(string, replacementRange: replacementRange) }
+    }
     override func performKeyEquivalent(with e: NSEvent) -> Bool {
         let mods = e.modifierFlags.intersection(.deviceIndependentFlagsMask).subtracting([.capsLock, .numericPad, .function])
         if commentable, mods == .command, e.keyCode == 44 || e.charactersIgnoringModifiers == "/", window?.firstResponder === self {
@@ -137,3 +140,38 @@ struct ScriptPane: View {
         }
     }
 }
+
+
+/// Typing `{` (on non-English layouts: Shift + the key that types `{` on the English one, e.g. Russian «Х») over a selection wraps it in `{ }` and keeps the text selected, so a second `{` gives `{{ text }}` (variable syntax).
+/// Returns false when it does not apply (nothing selected, another character): the caller inserts the character as usual.
+@MainActor func surroundSelection(of tv: NSTextView, with string: Any) -> Bool {
+    let typed = (string as? String) ?? (string as? NSAttributedString)?.string
+    let sel = tv.selectedRange()
+    guard sel.length > 0, !tv.hasMarkedText(), let t = typed else { return false }
+    // "{" itself, or — on layouts where that key types a letter (Russian "Х", Ukrainian "Х", …) — Shift + the physical key of "{" (key code 33)
+    var isBrace = t == "{"
+    if !isBrace, t.count == 1, t.first?.isLetter == true, let e = NSApp.currentEvent, e.type == .keyDown, e.keyCode == 33,
+       e.modifierFlags.intersection(.deviceIndependentFlagsMask).subtracting([.capsLock, .numericPad, .function]) == .shift { isBrace = true }
+    guard isBrace else { return false }
+    let inner = (tv.string as NSString).substring(with: sel)
+    guard tv.shouldChangeText(in: sel, replacementString: "{" + inner + "}") else { return true }
+    tv.textStorage?.replaceCharacters(in: sel, with: "{" + inner + "}")
+    tv.didChangeText()
+    tv.setSelectedRange(NSRange(location: sel.location + 1, length: sel.length))
+    return true
+}
+
+/// Field editor of the single-line fields: same surround behaviour as the code editor.
+final class SurroundFieldEditor: NSTextView {
+    override func insertText(_ string: Any, replacementRange: NSRange) {
+        if !surroundSelection(of: self, with: string) { super.insertText(string, replacementRange: replacementRange) }
+    }
+}
+final class SurroundCell: NSTextFieldCell {
+    private var editor: SurroundFieldEditor?
+    override func fieldEditor(for controlView: NSView) -> NSTextView? {
+        if editor == nil { let e = SurroundFieldEditor(); e.isFieldEditor = true; editor = e }
+        return editor
+    }
+}
+final class SurroundTextField: NSTextField { override class var cellClass: AnyClass? { get { SurroundCell.self } set {} } }

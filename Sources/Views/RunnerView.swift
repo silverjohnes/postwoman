@@ -12,6 +12,7 @@ struct RunnerInner: View {
     @EnvironmentObject var store: Store
     @ObservedObject var runner: Runner
     @State private var picked: ExecResult.ID?
+    @State private var showPreview = false
     @State private var detailGen = 0          // bumped when a result is picked automatically → ResultDetail starts on "Res body" again
 
     var body: some View {
@@ -26,6 +27,8 @@ struct RunnerInner: View {
                 Stepper(L("Interval: %ld ms", store.interval), value: $store.interval, in: 0...3_600_000, step: 100)
                 Button(store.dataURL?.lastPathComponent ?? L("Data file (CSV/JSON)…")) { store.pickData() }
                 if store.dataURL != nil { Button { store.dataURL = nil; if store.iterations == 0 { store.iterations = 1 } } label: { Image(systemName: "xmark.circle") }.buttonStyle(.borderless) }
+                if store.dataURL != nil { Button(L("Preview")) { showPreview = true } }
+                if runner.hasErrorRows { Button(L("Errors CSV")) { runner.saveErrorsCSV() }.help(L("Data rows of failed requests, without duplicates")) }
                 Spacer()
                 switch runner.state {
                 case .idle: Button("Run") { store.run() }.buttonStyle(.borderedProminent).disabled(store.primary == nil)
@@ -44,6 +47,9 @@ struct RunnerInner: View {
         .padding()
         .onAppear { autoPick() }
         .onChange(of: runner.results.count) { autoPick() }
+        .sheet(isPresented: $showPreview) {
+            if let u = store.dataURL { DataPreview(url: u, target: store.primary).environmentObject(store) }
+        }
     }
 
     /// A single request was run → show its result right away (Res body tab), not the run log.
@@ -101,4 +107,105 @@ struct LogView: View {
     let text: String
     var body: some View { ScrollView { Text(text.isEmpty ? " " : text).font(.system(.caption, design: .monospaced)).textSelection(.enabled).frame(maxWidth: .infinity, alignment: .leading).padding(6) }
         .background(Color.secondary.opacity(0.08)) }
+}
+
+
+// MARK: Data file preview (Runner tab): the variables of the file, and the requests as they will be sent for a chosen row
+struct DataPreview: View {
+    @EnvironmentObject var store: Store
+    @Environment(\.dismiss) private var dismiss
+    let url: URL
+    let target: Node?
+    @State private var tab = 0
+    @State private var columns: [String] = []
+    @State private var rows: [[String: String]] = []
+    @State private var row = 0
+    private static let shown = 500
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 10) {
+            HStack {
+                Text(url.lastPathComponent).font(.title3.bold())
+                Text(L("%ld row(s), %ld variable(s)", rows.count, columns.count)).foregroundStyle(.secondary)
+                Spacer()
+                Button(L("Close")) { dismiss() }.keyboardShortcut(.cancelAction)
+            }
+            TabStrip(items: [(0, L("Variables")), (1, L("Requests"))], selection: $tab)
+            if tab == 0 { variables } else { requests }
+        }
+        .padding().frame(minWidth: 760, minHeight: 520)
+        .onAppear {
+            columns = Runner.loadColumns(url); rows = Runner.loadRows(url)
+            if columns.isEmpty { columns = Array(Set(rows.flatMap { $0.keys })).sorted() }
+        }
+    }
+
+    private var variables: some View {
+        ScrollView([.horizontal, .vertical]) {
+            Grid(alignment: .leading, horizontalSpacing: 16, verticalSpacing: 4) {
+                GridRow {
+                    Text("#").foregroundStyle(.secondary)
+                    ForEach(columns, id: \.self) { Text($0).bold() }
+                }
+                Divider()
+                ForEach(Array(rows.prefix(Self.shown).enumerated()), id: \.offset) { i, r in
+                    GridRow {
+                        Text("\(i + 1)").foregroundStyle(.secondary)
+                        ForEach(columns, id: \.self) { Text(r[$0] ?? "").textSelection(.enabled) }
+                    }
+                }
+            }
+            .font(.system(.body, design: .monospaced)).padding(6)
+            if rows.count > Self.shown { Text(L("First %ld rows shown", Self.shown)).font(.caption).foregroundStyle(.secondary) }
+        }
+        .background(Color.secondary.opacity(0.08))
+    }
+
+    /// {{name}} → value of the data row, else a plain Globals value; secrets are never decrypted here; unknown names stay as they are.
+    private func substitute(_ s: String, _ vars: [String: String]) -> String {
+        guard s.contains("{{"), let re = try? NSRegularExpression(pattern: "\\{\\{([^{}\\n]+)\\}\\}") else { return s }
+        let ns = s as NSString
+        var out = "", last = 0
+        for m in re.matches(in: s, range: NSRange(location: 0, length: ns.length)) {
+            out += ns.substring(with: NSRange(location: last, length: m.range.location - last))
+            let name = ns.substring(with: m.range(at: 1)).trimmingCharacters(in: .whitespaces)
+            out += vars[name] ?? ns.substring(with: m.range)
+            last = NSMaxRange(m.range)
+        }
+        return out + ns.substring(from: last)
+    }
+    private func text(for q: Node, _ vars: [String: String]) -> String {
+        let inherited = store.inherited(for: q).map(\.h)
+        let headers = Node.merge(inherited, q.headers).filter(\.enabled)
+            .map { KV(key: substitute($0.key, vars), value: substitute($0.value, vars)) }
+        var body = ""
+        switch q.bodyMode {
+        case "raw": body = q.body
+        case "urlencoded": body = q.urlencoded.filter(\.enabled).map { "\($0.key)=\($0.value)" }.joined(separator: "&")
+        default: break
+        }
+        return HTTPText.request(method: q.method, url: substitute(q.url, vars), headers: headers, body: substitute(body, vars))
+    }
+    private var requests: some View {
+        let reqs = target?.requests() ?? []
+        var vars: [String: String] = [:]
+        for g in store.globals where g.enabled && !g.key.isEmpty { vars[g.key] = g.secret ? "‹secret: \(g.key)›" : g.value }
+        if rows.indices.contains(row) { for (k, v) in rows[row] { vars[k] = v } }
+        return VStack(alignment: .leading, spacing: 8) {
+            if !rows.isEmpty {
+                Stepper(L("Row %ld of %ld", row + 1, rows.count), value: $row, in: 0...(rows.count - 1))
+            }
+            if reqs.isEmpty { Text(L("Select a collection, folder or request in the sidebar")).foregroundStyle(.secondary) }
+            ScrollView {
+                LazyVStack(alignment: .leading, spacing: 10) {
+                    ForEach(reqs.prefix(200)) { q in
+                        GroupBox(q.name) {
+                            Text(text(for: q, vars)).font(.system(.body, design: .monospaced)).textSelection(.enabled)
+                                .frame(maxWidth: .infinity, alignment: .leading)
+                        }
+                    }
+                }.padding(2)
+            }
+        }
+    }
 }

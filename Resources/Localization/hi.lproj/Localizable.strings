@@ -231,3 +231,12 @@
 "Select several: ⇧-click selects a range, ⌘-click adds or removes" = "एकाधिक चुनें: ⇧-क्लिक सीमा चुनता है, ⌘-क्लिक जोड़ता या हटाता है";
 "Delete the selected executions in History" = "इतिहास में चुने गए निष्पादन हटाएँ";
 "Unsaved" = "असहेजा";
+"Bulk edit" = "सामूहिक संपादन";
+"Preview" = "पूर्वावलोकन";
+"Variables" = "वेरिएबल";
+"Close" = "बंद करें";
+"Errors CSV" = "त्रुटियों की CSV";
+"Data rows of failed requests, without duplicates" = "विफल अनुरोधों की डेटा पंक्तियाँ, बिना डुप्लिकेट";
+"%ld row(s), %ld variable(s)" = "पंक्तियाँ: %ld, वेरिएबल: %ld";
+"First %ld rows shown" = "पहली %ld पंक्तियाँ दिखाई गई हैं";
+"Row %ld of %ld" = "पंक्ति %ld / %ld";

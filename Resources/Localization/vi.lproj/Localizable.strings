@@ -231,3 +231,12 @@
 "Select several: ⇧-click selects a range, ⌘-click adds or removes" = "Chọn nhiều: ⇧-nhấp chọn một dải, ⌘-nhấp thêm hoặc bỏ";
 "Delete the selected executions in History" = "Xóa các lần chạy đã chọn trong Lịch sử";
 "Unsaved" = "Chưa lưu";
+"Bulk edit" = "Sửa hàng loạt";
+"Preview" = "Xem trước";
+"Variables" = "Biến";
+"Close" = "Đóng";
+"Errors CSV" = "CSV lỗi";
+"Data rows of failed requests, without duplicates" = "Các dòng dữ liệu của yêu cầu lỗi, không trùng lặp";
+"%ld row(s), %ld variable(s)" = "%ld dòng, %ld biến";
+"First %ld rows shown" = "Hiển thị %ld dòng đầu";
+"Row %ld of %ld" = "Dòng %ld/%ld";

@@ -231,3 +231,12 @@
 "Select several: ⇧-click selects a range, ⌘-click adds or removes" = "Выбор нескольких: ⇧-клик — диапазон, ⌘-клик — добавить или убрать";
 "Delete the selected executions in History" = "Удалить выбранные выполнения в Истории";
 "Unsaved" = "Не сохранено";
+"Bulk edit" = "Массовая правка";
+"Preview" = "Предпросмотр";
+"Variables" = "Переменные";
+"Close" = "Закрыть";
+"Errors CSV" = "CSV ошибок";
+"Data rows of failed requests, without duplicates" = "Строки данных запросов с ошибками, без дубликатов";
+"%ld row(s), %ld variable(s)" = "строк: %ld, переменных: %ld";
+"First %ld rows shown" = "Показаны первые %ld строк";
+"Row %ld of %ld" = "Строка %ld из %ld";

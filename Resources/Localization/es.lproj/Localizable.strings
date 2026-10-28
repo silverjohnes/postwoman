@@ -231,3 +231,12 @@
 "Select several: ⇧-click selects a range, ⌘-click adds or removes" = "Selección múltiple: ⇧-clic selecciona un rango, ⌘-clic añade o quita";
 "Delete the selected executions in History" = "Eliminar las ejecuciones seleccionadas del historial";
 "Unsaved" = "Sin guardar";
+"Bulk edit" = "Edición masiva";
+"Preview" = "Vista previa";
+"Variables" = "Variables";
+"Close" = "Cerrar";
+"Errors CSV" = "CSV de errores";
+"Data rows of failed requests, without duplicates" = "Filas de datos de las solicitudes fallidas, sin duplicados";
+"%ld row(s), %ld variable(s)" = "%ld fila(s), %ld variable(s)";
+"First %ld rows shown" = "Se muestran las primeras %ld filas";
+"Row %ld of %ld" = "Fila %ld de %ld";

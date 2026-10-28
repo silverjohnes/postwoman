@@ -63,6 +63,15 @@ final class Store: ObservableObject {
     var folder: URL { StorageLocation.current }
     var collectionsDir: URL { folder.appendingPathComponent("collections") }
     var globalsFile: URL { folder.appendingPathComponent("globals.json") }
+    /// The order of the collections in the sidebar (file names): remembered between launches.
+    var orderFile: URL { folder.appendingPathComponent("collections-order.json") }
+    func saveOrder() {
+        let names = roots.compactMap(\.file)
+        guard names.count == roots.count else { return }                  // a collection without a file yet: written after its first save
+        let j = JSON.arr(names.map { .str($0) })
+        if let d = try? Data(contentsOf: orderFile), JSON.parse(d) == j { return }
+        try? j.data().write(to: orderFile)
+    }
 
     func log(_ cat: String, _ msg: String, _ level: LogLevel = .info) { logStore.add(LogEntry(level: level, cat: cat, msg: msg)) }
     let vault = SecretVault.shared
@@ -105,7 +114,12 @@ final class Store: ObservableObject {
         roots = []; globals = []; selected = []; primary = nil
         let fm = FileManager.default
         try? fm.createDirectory(at: collectionsDir, withIntermediateDirectories: true)
-        let files = (try? fm.contentsOfDirectory(atPath: collectionsDir.path))?.filter { $0.hasSuffix(".json") }.sorted() ?? []
+        let allFiles = (try? fm.contentsOfDirectory(atPath: collectionsDir.path))?.filter { $0.hasSuffix(".json") && $0 != "collections-order.json" }.sorted() ?? []
+        let saved = ((try? Data(contentsOf: orderFile)).flatMap { JSON.parse($0) }?.list ?? []).compactMap(\.text)
+        let files = allFiles.sorted { a, b in                              // remembered order first, new files after (alphabetical)
+            let i = saved.firstIndex(of: a) ?? Int.max, k = saved.firstIndex(of: b) ?? Int.max
+            return i != k ? i < k : a < b
+        }
         var converted = false
         for f in files {
             if let d = try? Data(contentsOf: collectionsDir.appendingPathComponent(f)), let j = JSON.parse(d) {
@@ -332,7 +346,7 @@ final class Store: ObservableObject {
             for n in moving { roots.forEach { $0.remove(n) } }
             if !insert(moving, near: target, pos: pos) { return }
         }
-        objectWillChange.send(); recompute(); autosaveTick()
+        objectWillChange.send(); recompute(); autosaveTick(); saveOrder()
         log("tree", "Moved " + moving.map(\.name).joined(separator: ", ") + " → \"\(target.name)\" (\(pos))")
     }
 
@@ -430,7 +444,10 @@ final class Store: ObservableObject {
         let col = Node.scoped(root: root, target: n)
         let secretCount = globals.filter { $0.enabled && $0.secret && !$0.value.isEmpty }.count
         log("run", "Run \"\(n.name)\" (\(n.children == nil ? "request" : n.isRoot ? "collection" : "folder"), \(col.dict["item"]?.list.count ?? 0) top-level item(s)); data: \(data?.lastPathComponent ?? "none"), \(globals.filter(\.enabled).count) global(s), \(secretCount) secret")
-        guard runner.state == .idle, !preparingRun else { return }
+        guard runner.state == .idle, !preparingRun else {
+            log("run", "Not started: the previous run is still \(preparingRun ? "being prepared" : runner.state == .paused ? "paused" : "active") — stop it first", .warn)
+            NSSound.beep(); return
+        }
         preparingRun = true
         // Secret variables: authenticate once per launch, decrypt in memory, hand them to node through a pipe (never a file).
         Task {

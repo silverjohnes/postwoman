@@ -231,3 +231,12 @@
 "Select several: ⇧-click selects a range, ⌘-click adds or removes" = "Flera val: ⇧-klick markerar ett intervall, ⌘-klick lägger till eller tar bort";
 "Delete the selected executions in History" = "Radera de markerade körningarna i Historik";
 "Unsaved" = "Osparat";
+"Bulk edit" = "Massredigering";
+"Preview" = "Förhandsvisning";
+"Variables" = "Variabler";
+"Close" = "Stäng";
+"Errors CSV" = "Fel-CSV";
+"Data rows of failed requests, without duplicates" = "Datarader för misslyckade förfrågningar, utan dubbletter";
+"%ld row(s), %ld variable(s)" = "%ld rad(er), %ld variabel/variabler";
+"First %ld rows shown" = "De första %ld raderna visas";
+"Row %ld of %ld" = "Rad %ld av %ld";

@@ -231,3 +231,12 @@
 "Select several: ⇧-click selects a range, ⌘-click adds or removes" = "متعدد منتخب کریں: ⇧-کلک رینج منتخب کرتا ہے، ⌘-کلک شامل یا خارج کرتا ہے";
 "Delete the selected executions in History" = "ہسٹری میں منتخب عمل درآمد حذف کریں";
 "Unsaved" = "غیر محفوظ";
+"Bulk edit" = "اجتماعی ترمیم";
+"Preview" = "پیش منظر";
+"Variables" = "متغیرات";
+"Close" = "بند کریں";
+"Errors CSV" = "خرابیوں کی CSV";
+"Data rows of failed requests, without duplicates" = "ناکام درخواستوں کی ڈیٹا قطاریں، بغیر تکرار کے";
+"%ld row(s), %ld variable(s)" = "قطاریں: %ld، متغیرات: %ld";
+"First %ld rows shown" = "پہلی %ld قطاریں دکھائی گئی ہیں";
+"Row %ld of %ld" = "قطار %ld از %ld";

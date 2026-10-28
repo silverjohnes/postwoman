@@ -1,3 +1,4 @@
+import AppKit
 import Combine
 import UniformTypeIdentifiers
 import Foundation
@@ -19,6 +20,8 @@ final class Runner: ObservableObject {
     private func fail(_ m: String) { log = m + "\n"; state = .idle }
     private var proc: Process?
     private var stopped = false
+    private var gen = 0                         // run counter: delayed stop handling must not touch a newer run
+    private var finishExec: (() -> Void)?       // releases the awaiting `exec` (used when the process cannot be stopped)
     private(set) var completed = false          // the last run reached its end (not stopped, not failed)
 
     // MARK: App lifecycle
@@ -42,9 +45,38 @@ final class Runner: ObservableObject {
         state = .running; note("Resumed")
     }
     func stop() {
+        guard state != .idle else { return }
         stopped = true; note("Stop requested", .warn)
-        if let p = proc, p.isRunning { if state == .paused { p.resume() }; p.terminate() }
-        state = .running /* loop sees `stopped` and finishes */
+        let g = gen
+        if let p = proc, p.isRunning { kill(p.processIdentifier, SIGCONT); p.terminate() }
+        if state == .paused { state = .running }          // the loop sees `stopped` and finishes
+        // A run must never stay "busy" after Stop. Watch it with plain main-queue timers (independent of the process's termination callback):
+        // every 0.25 s: process gone → release; after 2 s: SIGKILL; after 3.5 s: give up on the process and make the runner idle.
+        let t0 = Date()
+        func tick() {
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.25) { MainActor.assumeIsolated { [weak self] in
+                guard let s = self, s.gen == g, s.state != .idle else { return }
+                let age = Date().timeIntervalSince(t0)
+                if let p = s.proc, p.isRunning {
+                    if age >= 2, !s.killSent { s.killSent = true; s.note("Process did not stop: sending SIGKILL", .warn); kill(p.processIdentifier, SIGKILL) }
+                } else if let f = s.finishExec {
+                    s.note("Process is gone: releasing the run", .debug); f()          // terminationHandler did not report it
+                }
+                if age >= 3.5 { s.forceIdle(); return }
+                tick()
+            } }
+        }
+        killSent = false
+        tick()
+    }
+    private var killSent = false
+    /// Last resort after Stop: the run is over whatever the process or its callback does.
+    private func forceIdle() {
+        note("Run released after Stop (the process did not report that it finished)", .warn)
+        finishExec?()
+        gen += 1                                          // the old run loop can no longer touch the state of a new one
+        state = .idle; proc = nil; progress = L("Stopped")
+        secretValues = [:]; redactor = Redactor(secrets: [:])
     }
 
     // MARK: Run
@@ -59,10 +91,13 @@ final class Runner: ObservableObject {
     private var lastEventAt = Date()
     private var runID = ""
     private var currentRow: [String: String] = [:]
+    /// Column order of the data file used by the last run (the rows are dictionaries, so the order is kept here): for "Errors CSV".
+    var dataColumns: [String] = []
+    var dataFileName = ""                       // name of that data file without extension (the file may be cleared from the tab after a run)
     private var pendingHistory = Set<Int>()        // indexes of results not yet written to the history
 
     func start(collection col: JSON, globals: [Var], secrets: [String: String] = [:], dataURL: URL?, iterations: Int, intervalMs: Int, timeoutSec: Int) {
-        guard state == .idle else { return }
+        guard state == .idle else { note("Start ignored: the previous run is still \(state == .paused ? "paused" : "running")", .warn, "runner"); return }
         // The newman wrapper ships inside the app bundle (Contents/Resources/runner.js).
         guard let jsURL = Bundle.main.url(forResource: "runner", withExtension: "js") else {
             note("runner.js is missing from the app bundle (Contents/Resources) — rebuild the app", .error, "prepare")
@@ -71,7 +106,7 @@ final class Runner: ObservableObject {
         if let problem = EmbeddedRuntime.problem() {
             note(problem, .error, "prepare"); progress = L("Runtime missing"); fail(problem); return
         }
-        results = []; log = ""; stopped = false; completed = false; state = .running; execIndex = [:]
+        gen += 1; results = []; log = ""; stopped = false; completed = false; state = .running; execIndex = [:]
         secretValues = secrets; redactor = Redactor(secrets: secrets)
         runID = UUID().uuidString.lowercased(); pendingHistory = []
         let t0 = Date()
@@ -92,13 +127,16 @@ final class Runner: ObservableObject {
         note("Prepared \(dir.path): collection \(colData.count) bytes, \(col["item"]?.list.count ?? 0) top-level item(s), \(enabledGlobals.count) global(s) + \(secrets.count) secret(s) via stdin (\(Int(Date().timeIntervalSince(t0) * 1000)) ms)", .debug, "prepare")
 
         let rows = dataURL.flatMap { Self.loadRows($0) } ?? []
+        dataColumns = dataURL.map { Self.loadColumns($0) } ?? []
+        dataFileName = dataURL?.deletingPathExtension().lastPathComponent ?? ""
         if let u = dataURL {
             note("Data file \(u.lastPathComponent): \(rows.count) row(s), columns: \((rows.first?.keys.sorted() ?? []).joined(separator: ", "))", rows.isEmpty ? .warn : .info, "prepare")
         }
 
+        let myGen = gen
         Task {
             for i in 0..<total {
-                if stopped { break }
+                if stopped || gen != myGen { break }
                 iterNo = i + 1
                 currentRow = rows.isEmpty ? [:] : rows[i % rows.count]
                 progress = L("Iteration %ld / %ld", i + 1, total)
@@ -122,10 +160,11 @@ final class Runner: ObservableObject {
             }
             progress = stopped ? L("Stopped") : L("Done")
             note(stopped ? "Run stopped by user" : "Run finished: \(results.count) request(s) in \(Int(Date().timeIntervalSince(t0) * 1000)) ms", stopped ? .warn : .info, "runner")
+            try? FileManager.default.removeItem(at: dir)
+            guard gen == myGen else { return }                // released by Stop's watchdog (a new run may be going)
             completed = !stopped
             state = .idle; proc = nil
             secretValues = [:]; redactor = Redactor(secrets: [:])
-            try? FileManager.default.removeItem(at: dir)
         }
     }
 
@@ -169,6 +208,9 @@ final class Runner: ObservableObject {
             }
         }
         await withCheckedContinuation { (c: CheckedContinuation<Void, Never>) in
+            var done = false
+            let finish: () -> Void = { if !done { done = true; c.resume() } }
+            self.finishExec = finish
             p.terminationHandler = { pr in
                 pipe.fileHandleForReading.readabilityHandler = nil
                 // Never readDataToEndOfFile() here: a grandchild holding the pipe open would block it forever.
@@ -179,7 +221,7 @@ final class Runner: ObservableObject {
                     let ms = Int(Date().timeIntervalSince(self.launchedAt) * 1000)
                     let how = pr.terminationReason == .exit ? "exit code \(pr.terminationStatus)" : "signal \(pr.terminationStatus)"
                     self.note("Process finished: \(how), \(ms) ms after launch", pr.terminationStatus == 0 ? .info : .warn, "launch")
-                    c.resume()
+                    finish()
                 } }
             }
             do {
@@ -191,9 +233,9 @@ final class Runner: ObservableObject {
                     DispatchQueue.global(qos: .userInitiated).async { try? h.write(contentsOf: payload); try? h.close() }
                 }
             }
-            catch { log += "Failed to launch: \(error)\n"; note("Failed to launch \(EmbeddedRuntime.nodeURL.path): \(error)", .error, "launch"); c.resume() }
+            catch { log += "Failed to launch: \(error)\n"; note("Failed to launch \(EmbeddedRuntime.nodeURL.path): \(error)", .error, "launch"); finish() }
         }
-        watchdog.cancel()
+        watchdog.cancel(); finishExec = nil
         Runner.liveProcess = nil
     }
 
@@ -306,6 +348,14 @@ final class Runner: ObservableObject {
         return table.dropFirst().filter { $0.count > 1 || $0.first?.isEmpty == false }
             .map { row in Dictionary(uniqueKeysWithValues: head.enumerated().map { ($1, $0 < row.count ? row[$0] : "") }) }
     }
+    /// Column names of a data file in file order (CSV header; JSON: sorted union of keys).
+    nonisolated static func loadColumns(_ url: URL) -> [String] {
+        guard let d = try? Data(contentsOf: url) else { return [] }
+        if url.pathExtension.lowercased() == "json" {
+            return Array(Set((JSON.parse(d)?.list ?? []).flatMap { $0.dict.keys })).sorted()
+        }
+        return csv(String(decoding: d, as: UTF8.self)).first ?? []
+    }
     nonisolated static func csv(_ s: String) -> [[String]] {
         var rows: [[String]] = [], row: [String] = [], f = "", quoted = false
         let ch = Array(s.replacingOccurrences(of: "\r\n", with: "\n")); var i = 0
@@ -341,5 +391,46 @@ extension Runner {
             return .obj(o)
         default: return j
         }
+    }
+}
+
+
+// MARK: Errors → CSV
+extension ExecResult {
+    /// A failed assertion / script error / network error (no response) / HTTP 4xx-5xx.
+    var isError: Bool { !failures.isEmpty || code == 0 || code >= 400 }
+}
+extension Runner {
+    /// Data rows of the executions that ended with an error, without duplicates (same values in every column), in run order.
+    func errorRows() -> (columns: [String], rows: [[String]]) {
+        let failed = results.filter { $0.isError && !$0.dataRow.isEmpty }
+        var cols = dataColumns
+        for k in Set(failed.flatMap { $0.dataRow.keys }).subtracting(cols).sorted() { cols.append(k) }
+        var seen = Set<[String]>(), rows: [[String]] = []
+        for r in failed {
+            let row = cols.map { r.dataRow[$0] ?? "" }
+            if seen.insert(row).inserted { rows.append(row) }
+        }
+        return (cols, rows)
+    }
+    var hasErrorRows: Bool { results.contains { $0.isError && !$0.dataRow.isEmpty } }
+
+    func errorsCSV() -> String {
+        func q(_ f: String) -> String {
+            f.contains(where: { $0 == "," || $0 == "\"" || $0 == "\n" || $0 == "\r" }) || f.hasPrefix(" ") || f.hasSuffix(" ")
+                ? "\"" + f.replacingOccurrences(of: "\"", with: "\"\"") + "\"" : f
+        }
+        let (cols, rows) = errorRows()
+        return ([cols] + rows).map { $0.map(q).joined(separator: ",") }.joined(separator: "\n") + "\n"
+    }
+    @MainActor func saveErrorsCSV() {
+        let (_, rows) = errorRows()
+        let p = NSSavePanel(); p.allowedContentTypes = [.commaSeparatedText]; p.nameFieldStringValue = (dataFileName.isEmpty ? "" : dataFileName + "_") + "errors.csv"
+        p.message = L("Data rows of failed requests, without duplicates")
+        guard p.runModal() == .OK, let u = p.url else { return }
+        do {
+            try errorsCSV().data(using: .utf8)?.write(to: u)
+            note("Errors CSV saved: \(rows.count) unique row(s) → \(u.lastPathComponent)", .info, "runner")
+        } catch { note("Errors CSV not saved: \(error.localizedDescription)", .error, "runner") }
     }
 }

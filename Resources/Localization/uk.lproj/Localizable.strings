@@ -231,3 +231,12 @@
 "Select several: ⇧-click selects a range, ⌘-click adds or removes" = "Выбор нескольких: ⇧-клик — диапазон, ⌘-клик — добавить или убрать";
 "Delete the selected executions in History" = "Удалить выбранные выполнения в Истории";
 "Unsaved" = "Не сохранено";
+"Bulk edit" = "Масове редагування";
+"Preview" = "Попередній перегляд";
+"Variables" = "Змінні";
+"Close" = "Закрити";
+"Errors CSV" = "CSV помилок";
+"Data rows of failed requests, without duplicates" = "Рядки даних запитів із помилками, без дублікатів";
+"%ld row(s), %ld variable(s)" = "рядків: %ld, змінних: %ld";
+"First %ld rows shown" = "Показано перші %ld рядків";
+"Row %ld of %ld" = "Рядок %ld з %ld";

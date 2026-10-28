@@ -231,3 +231,12 @@
 "Select several: ⇧-click selects a range, ⌘-click adds or removes" = "Meerdere selecteren: ⇧-klik selecteert een bereik, ⌘-klik voegt toe of verwijdert";
 "Delete the selected executions in History" = "De geselecteerde uitvoeringen in Geschiedenis verwijderen";
 "Unsaved" = "Niet bewaard";
+"Bulk edit" = "Bulkbewerking";
+"Preview" = "Voorbeeld";
+"Variables" = "Variabelen";
+"Close" = "Sluiten";
+"Errors CSV" = "Fouten-CSV";
+"Data rows of failed requests, without duplicates" = "Datarijen van mislukte verzoeken, zonder duplicaten";
+"%ld row(s), %ld variable(s)" = "%ld rij(en), %ld variabele(n)";
+"First %ld rows shown" = "Eerste %ld rijen getoond";
+"Row %ld of %ld" = "Rij %ld van %ld";
