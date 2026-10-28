@@ -5,12 +5,25 @@ import UniformTypeIdentifiers
 // MARK: Main layout
 struct ContentView: View {
     @EnvironmentObject var store: Store
+    @Environment(\.openSettings) private var openSettings
     var body: some View {
         NavigationSplitView {
             SidebarView().navigationSplitViewColumnWidth(min: 250, ideal: 300)
         } detail: {
             VStack(spacing: 0) {
-                HStack { TabStrip(items: MainTab.allCases.map { ($0, L($0.rawValue)) }, selection: $store.tab); Spacer(minLength: 0) }.padding(8)
+                HStack { TabStrip(items: MainTab.allCases.map { ($0, L($0.rawValue)) }, selection: $store.tab)
+                    if !store.storageProblems.isEmpty {
+                        HStack(spacing: 8) {
+                            Image(systemName: "exclamationmark.triangle.fill")
+                            Text(store.storageProblems.joined(separator: " · ")).lineLimit(1).truncationMode(.middle)
+                            Button(L("Check paths in Settings")) { openSettings() }.controlSize(.small)
+                        }
+                        .font(.caption).foregroundStyle(.white)
+                        .padding(.horizontal, 10).padding(.vertical, 4)
+                        .background(Color.red, in: RoundedRectangle(cornerRadius: 8))
+                        .layoutPriority(1)
+                    }
+                    Spacer(minLength: 0) }.padding(8)
                 Divider()
                 switch store.tab {
                 case .request:

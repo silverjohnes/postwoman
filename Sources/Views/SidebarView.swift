@@ -19,7 +19,7 @@ struct SidebarView: View {
                     Text(store.counter).font(.caption.monospacedDigit()).foregroundStyle(store.matches.isEmpty ? Color.red : Color.secondary)
                     Button { store.jump(-1) } label: { Image(systemName: "chevron.up") }.buttonStyle(.borderless).disabled(store.matches.isEmpty)
                     Button { store.jump(1) } label: { Image(systemName: "chevron.down") }.buttonStyle(.borderless).disabled(store.matches.isEmpty)
-                    Button { store.query = "" } label: { Image(systemName: "xmark.circle.fill") }.buttonStyle(.borderless).foregroundStyle(.secondary)
+                    CloseButton(help: "Clear") { store.query = "" }
                 }
             }
             .padding(6).background(RoundedRectangle(cornerRadius: 6).fill(Color.secondary.opacity(0.12))).padding([.horizontal, .top], 8)

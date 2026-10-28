@@ -11,7 +11,8 @@ enum Syntax {
 enum Highlighter {
     static let cap = 250_000
     /// Variable names that exist (Globals + names set by scripts); {{others}} are drawn red. Maintained by the Store.
-    static var known: Set<String> = []
+    static var known: Set<String> = [] { didSet { knownLower = Set(known.map { $0.lowercased() }) } }
+    private(set) static var knownLower: Set<String> = []          // variable names are not case sensitive
     static func font(_ size: CGFloat) -> NSFont { NSFont.monospacedSystemFont(ofSize: size, weight: .regular) }
 
     private static let cKeyword = NSColor.systemPink
@@ -20,7 +21,7 @@ enum Highlighter {
     private static let cComment = NSColor.secondaryLabelColor
     private static let cKey = NSColor.systemTeal
     private static let cBuiltin = NSColor.systemPurple
-    private static let cVar = NSColor.systemOrange
+    static let cVar = NSColor.systemOrange
     private static let cFlag = NSColor.systemIndigo
 
     private static let jsKeywords: Set<String> = ["const", "let", "var", "function", "return", "if", "else", "for", "while", "do", "switch", "case", "break", "continue",
@@ -63,7 +64,7 @@ enum Highlighter {
         let ns = s as NSString
         for r in re.matches(in: s, range: NSRange(location: 0, length: ns.length)) {
             let name = ns.substring(with: r.range(at: 1)).trimmingCharacters(in: .whitespaces)
-            let ok = name.hasPrefix("$") || known.contains(name)
+            let ok = name.hasPrefix("$") || knownLower.contains(name.lowercased())
             let fg = ok ? cVar : NSColor.systemRed
             m.addAttributes([.foregroundColor: fg, .backgroundColor: fg.withAlphaComponent(ok ? 0.16 : 0.12)], range: r.range)
         }

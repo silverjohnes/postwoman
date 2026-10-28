@@ -36,7 +36,7 @@ struct VarField: NSViewRepresentable {
     func makeCoordinator() -> Coord { Coord(self) }
 
     func makeNSView(context: Context) -> NSTextField {
-        let f = NSTextField()
+        let f = SurroundTextField()
         f.isBordered = true; f.bezelStyle = .roundedBezel; f.isEditable = true
         f.usesSingleLineMode = true; f.cell?.wraps = false; f.cell?.isScrollable = true; f.lineBreakMode = .byTruncatingTail
         f.placeholderString = placeholder

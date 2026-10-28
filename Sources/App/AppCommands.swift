@@ -15,12 +15,16 @@ struct AppCommands: Commands {
         }
         CommandGroup(replacing: .saveItem) {
             Button("Save") { store.saveSelected() }.keyboardShortcut("s")
+            Button("Close Request") { if !store.closeRequest() { NSApp.keyWindow?.performClose(nil) } }.keyboardShortcut("w")
             Button("Save All") { store.saveAll() }.keyboardShortcut("s", modifiers: [.command, .option])
             Button("Export Collection…") { store.exportSelected() }.keyboardShortcut("e", modifiers: [.command, .shift])
         }
         CommandGroup(replacing: .undoRedo) {
             Button("Undo") { Self.undoRedo(redo: false, store: store) }.keyboardShortcut("z")
             Button("Redo") { Self.undoRedo(redo: true, store: store) }.keyboardShortcut("z", modifiers: [.command, .shift])
+            Divider()
+            Button("Undo for the whole app") { Self.wholeAppUndo(redo: false, store: store) }.keyboardShortcut("z", modifiers: [.command, .option])
+            Button("Redo for the whole app") { Self.wholeAppUndo(redo: true, store: store) }.keyboardShortcut("z", modifiers: [.command, .option, .shift])
         }
         CommandGroup(after: .windowArrangement) {
             Divider()
@@ -55,12 +59,37 @@ struct AppCommands: Commands {
         }
     }
 
-    /// A focused text field / editor undoes its own typing first; otherwise the whole request tree and Globals are rolled back.
+    /// ⌘Z / ⇧⌘Z: a focused text field / editor undoes its own typing first; then the part of the window that has the focus is rolled back on its own:
+    /// the request list (structure: create, delete, move, rename) or the open request. Other tabs and folders use the whole-app history.
     @MainActor static func undoRedo(redo: Bool, store: Store) {
+        let verb = redo ? "Redo" : "Undo"
         if let tv = NSApp.keyWindow?.firstResponder as? NSTextView, let um = tv.undoManager, redo ? um.canRedo : um.canUndo {
+            store.log("undo", "\(verb) (⌘Z): typing in the focused text field / editor", .info)
             if redo { um.redo() } else { um.undo() }
             return
         }
+        switch store.focusedPane() {
+        case .sidebar:
+            store.log("undo", "\(verb) (⌘Z): focus is in the request list", .debug)
+            store.undoStructure(redo: redo)
+        case .editor:
+            if store.tab == .request, let p = store.primary, p.children == nil {
+                store.log("undo", "\(verb) (⌘Z): focus is in the request editor", .debug)
+                store.undoRequest(redo: redo)
+            } else {
+                store.log("undo", "\(verb) (⌘Z): focus is in \(store.tab == .request ? "the folder editor" : "the \(store.tab.rawValue) tab") — whole-app history", .debug)
+                if redo { store.redo() } else { store.undo() }
+            }
+        }
+    }
+    /// ⌥⌘Z / ⇧⌥⌘Z: the old behaviour, one history for the whole app (all requests, the tree and Globals).
+    @MainActor static func wholeAppUndo(redo: Bool, store: Store) {
+        if let tv = NSApp.keyWindow?.firstResponder as? NSTextView, let um = tv.undoManager, redo ? um.canRedo : um.canUndo {
+            store.log("undo", "\(redo ? "Redo" : "Undo") (⌥⌘Z): typing in the focused text field / editor", .info)
+            if redo { um.redo() } else { um.undo() }
+            return
+        }
+        store.log("undo", "\(redo ? "Redo" : "Undo") (⌥⌘Z): whole-app history", .debug)
         if redo { store.redo() } else { store.undo() }
     }
 }

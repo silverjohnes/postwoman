@@ -6,10 +6,15 @@ struct CodeEditor: NSViewRepresentable {
     @Binding var text: String
     var syntax: Syntax = .plain
     var autofocus = false
+    var find = ""                                 // case-insensitive; hits are marked, the current one is scrolled to
+    var findIndex = 0
+    var onCount: ((Int) -> Void)? = nil
 
     final class Coord: NSObject, NSTextViewDelegate {
         var parent: CodeEditor
         var shown: Syntax?
+        var marks: [NSRange] = []
+        var lastFind = "", lastIdx = -1
         /// Each editor owns its undo stack. With the window's shared manager, entries of an editor that SwiftUI has already destroyed
         /// (switching requests, ⌘Z of the request tree) pointed at freed memory and crashed on the next ⌘Z.
         let undo = UndoManager()
@@ -19,6 +24,12 @@ struct CodeEditor: NSViewRepresentable {
             guard let tv = n.object as? NSTextView else { return }
             if parent.text != tv.string { parent.text = tv.string }
             if !tv.hasMarkedText(), let st = tv.textStorage { Highlighter.apply(to: st, syntax: parent.syntax, size: 12) }
+            if !parent.find.isEmpty || !marks.isEmpty { MainActor.assumeIsolated { remark(tv, scroll: false) } }       // typing moves the hits
+        }
+        @MainActor func remark(_ tv: NSTextView, scroll: Bool) {
+            lastFind = parent.find; lastIdx = parent.findIndex
+            let n = FindMarks.apply(tv, find: parent.find, index: parent.findIndex, scroll: scroll, previous: &marks)
+            if let cb = parent.onCount { DispatchQueue.main.async { cb(n) } }
         }
     }
     func makeCoordinator() -> Coord { Coord(self) }
@@ -62,8 +73,10 @@ struct CodeEditor: NSViewRepresentable {
         context.coordinator.parent = self
         guard let tv = sv.documentView as? NSTextView else { return }
         (tv as? CommentTextView)?.commentable = syntax == .javascript
+        let c = context.coordinator
         if tv.string == text {
-            if context.coordinator.shown != syntax, let st = tv.textStorage { context.coordinator.shown = syntax; Highlighter.apply(to: st, syntax: syntax, size: 12) }
+            if c.shown != syntax, let st = tv.textStorage { c.shown = syntax; Highlighter.apply(to: st, syntax: syntax, size: 12) }
+            if c.lastFind != find || c.lastIdx != findIndex { c.remark(tv, scroll: true) }
             return
         }
         context.coordinator.shown = syntax
@@ -72,6 +85,7 @@ struct CodeEditor: NSViewRepresentable {
         tv.string = text
         if let st = tv.textStorage { Highlighter.apply(to: st, syntax: syntax, size: 12) }
         tv.setSelectedRange(NSRange(location: min(sel.location, (text as NSString).length), length: 0))
+        c.marks = []; if !find.isEmpty { c.remark(tv, scroll: false) }
     }
 }
 
@@ -79,6 +93,9 @@ struct CodeEditor: NSViewRepresentable {
 /// (it must not leave full-screen mode). Works on any keyboard layout: the physical "/" key is matched by key code.
 final class CommentTextView: NSTextView {
     var commentable = false
+    override func insertText(_ string: Any, replacementRange: NSRange) {
+        if !surroundSelection(of: self, with: string) { super.insertText(string, replacementRange: replacementRange) }
+    }
     override func performKeyEquivalent(with e: NSEvent) -> Bool {
         let mods = e.modifierFlags.intersection(.deviceIndependentFlagsMask).subtracting([.capsLock, .numericPad, .function])
         if commentable, mods == .command, e.keyCode == 44 || e.charactersIgnoringModifiers == "/", window?.firstResponder === self {
@@ -137,3 +154,38 @@ struct ScriptPane: View {
         }
     }
 }
+
+
+/// Typing `{` (on non-English layouts: Shift + the key that types `{` on the English one, e.g. Russian «Х») over a selection wraps it in `{ }` and keeps the text selected, so a second `{` gives `{{ text }}` (variable syntax).
+/// Returns false when it does not apply (nothing selected, another character): the caller inserts the character as usual.
+@MainActor func surroundSelection(of tv: NSTextView, with string: Any) -> Bool {
+    let typed = (string as? String) ?? (string as? NSAttributedString)?.string
+    let sel = tv.selectedRange()
+    guard sel.length > 0, !tv.hasMarkedText(), let t = typed else { return false }
+    // "{" itself, or — on layouts where that key types a letter (Russian "Х", Ukrainian "Х", …) — Shift + the physical key of "{" (key code 33)
+    var isBrace = t == "{"
+    if !isBrace, t.count == 1, t.first?.isLetter == true, let e = NSApp.currentEvent, e.type == .keyDown, e.keyCode == 33,
+       e.modifierFlags.intersection(.deviceIndependentFlagsMask).subtracting([.capsLock, .numericPad, .function]) == .shift { isBrace = true }
+    guard isBrace else { return false }
+    let inner = (tv.string as NSString).substring(with: sel)
+    guard tv.shouldChangeText(in: sel, replacementString: "{" + inner + "}") else { return true }
+    tv.textStorage?.replaceCharacters(in: sel, with: "{" + inner + "}")
+    tv.didChangeText()
+    tv.setSelectedRange(NSRange(location: sel.location + 1, length: sel.length))
+    return true
+}
+
+/// Field editor of the single-line fields: same surround behaviour as the code editor.
+final class SurroundFieldEditor: NSTextView {
+    override func insertText(_ string: Any, replacementRange: NSRange) {
+        if !surroundSelection(of: self, with: string) { super.insertText(string, replacementRange: replacementRange) }
+    }
+}
+final class SurroundCell: NSTextFieldCell {
+    private var editor: SurroundFieldEditor?
+    override func fieldEditor(for controlView: NSView) -> NSTextView? {
+        if editor == nil { let e = SurroundFieldEditor(); e.isFieldEditor = true; editor = e }
+        return editor
+    }
+}
+final class SurroundTextField: NSTextField { override class var cellClass: AnyClass? { get { SurroundCell.self } set {} } }
