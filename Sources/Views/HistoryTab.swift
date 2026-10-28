@@ -209,7 +209,7 @@ private struct HistoryDetail: View {
             HStack {
                 TabStrip(items: sections, selection: $section); Spacer(minLength: 0)
                 if section == 0 {
-                    CopyButton(title: "Copy as curl") { CurlBuilder.build(method: entry.method, url: entry.url, headers: entry.reqHeaders, body: entry.reqBody) }.controlSize(.small)
+                    CopyButton(curl: true) { CurlBuilder.build(method: entry.method, url: entry.url, headers: entry.reqHeaders, body: entry.reqBody) }.controlSize(.small)
                 }
             }
             switch section {

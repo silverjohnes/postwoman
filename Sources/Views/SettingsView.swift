@@ -8,6 +8,10 @@ struct SettingsView: View {
     @ObservedObject private var vault = SecretVault.shared
     @State private var folderPath = StorageLocation.current.path
     @State private var isDefaultFolder = StorageLocation.isDefault
+    @State private var backupOn = StorageLocation.backupEnabled
+    @State private var backupPath = StorageLocation.backupPath
+    @State private var checking = false
+    @State private var checkRows: [(label: String, path: String, problem: String?)] = []
     @AppStorage("appLanguage") private var appLanguage = "auto"
     @AppStorage("autosave") private var autosave = true
     @Environment(\.openWindow) private var openWindow
@@ -48,9 +52,33 @@ struct SettingsView: View {
                         Button("Default") { resetFolder() }.disabled(isDefaultFolder)
                     }
                 }
-                note("Collections, globals and history are stored here. The app runs in the macOS sandbox, so it can only use the default folder (inside the app container) or a folder you choose with Choose…. Changing the folder loads the data from the new place. Moving from an older, unsandboxed version: choose its folder (usually ~/Documents/Postwoman).")
+                note("Folder for collections, variables and history")
+                Divider()
+                Toggle("Duplicate writes to the backup folder", isOn: $backupOn).disabled(backupPath.isEmpty)
+                LabeledContent("Folder") {
+                    HStack(spacing: 8) {
+                        Text(backupPath.isEmpty ? L("Not set") : backupPath).font(.system(.body, design: .monospaced)).lineLimit(2).truncationMode(.middle)
+                            .foregroundStyle(backupPath.isEmpty ? .secondary : .primary)
+                            .textSelection(.enabled).frame(maxWidth: .infinity, alignment: .leading)
+                        Button("Choose…") { chooseBackup() }
+                        CloseButton(help: "Remove") { clearBackup() }.disabled(backupPath.isEmpty)
+                    }
+                }
+                note("Backup storage path. When switched on, every change is written to both folders. A cloud folder can be used as the backup.")
+                HStack {
+                    Spacer()
+                    if checking { ProgressView().controlSize(.small) }
+                    Button("Check all paths") { checkPaths() }.disabled(checking)
+                }
+                ForEach(Array(checkRows.enumerated()), id: \.offset) { _, r in
+                    Text("\(r.label): \(r.path) — " + (r.problem.map { L("Unavailable") + " (\($0))" } ?? L("Available")))
+                        .font(.system(.caption, design: .monospaced)).foregroundStyle(r.problem == nil ? Color.green : Color.red)
+                        .textSelection(.enabled).fixedSize(horizontal: false, vertical: true).frame(maxWidth: .infinity, alignment: .leading)
+                }
             }
 
+            // Newman section hidden (the runtime is built into the app); remove the comment markers to bring it back.
+            /*
             Section("Newman") {
                 LabeledContent("Runtime") {
                     Text(runtimeInfo).font(.system(.body, design: .monospaced)).textSelection(.enabled)
@@ -72,6 +100,7 @@ struct SettingsView: View {
                         .frame(maxWidth: .infinity, alignment: .leading)
                 }
             }
+            */
 
             Section("Secret variables") {
                 LabeledContent("Key storage") {
@@ -114,7 +143,13 @@ struct SettingsView: View {
             }
         }
         .formStyle(.grouped)
-        .frame(width: 660, height: 800)
+        .frame(width: 660, height: 900)
+        .onAppear { if !store.storageProblems.isEmpty { checkPaths() } }
+        .onChange(of: backupOn) {
+            StorageLocation.backupEnabled = backupOn
+            store.log("settings", "Backup folder → " + (backupOn ? "on (\(backupPath))" : "off"))
+            if backupOn { store.scheduleMirror(now: true) } else { store.backupProblem = nil }
+        }
         .onChange(of: autosave) { if autosave { store.autosaveTick() }; store.refreshUnsaved(); store.log("settings", "Autosave → \(autosave)") }
         .onChange(of: appLanguage) { AppLanguage.apply(appLanguage); store.log("settings", "Interface language → \(appLanguage) (applied after restart)") }
         .onChange(of: timeout) { store.log("settings", "Request timeout → \(timeout) s") }
@@ -151,6 +186,27 @@ struct SettingsView: View {
     }
     private func resetFolder() {
         StorageLocation.reset(); store.log("settings", "Storage folder → default (\(StorageLocation.defaultFolder.path))"); refreshFolder(); store.load()
+    }
+    private func chooseBackup() {
+        let p = NSOpenPanel(); p.canChooseDirectories = true; p.canChooseFiles = false; p.canCreateDirectories = true
+        p.prompt = L("Use as backup")
+        guard p.runModal() == .OK, let u = p.url else { return }
+        if u.standardizedFileURL.path == StorageLocation.current.standardizedFileURL.path {
+            store.log("settings", "The backup folder must differ from the main folder", .warn); NSSound.beep(); return
+        }
+        if StorageLocation.chooseBackup(u) {
+            backupPath = u.path; backupOn = true; StorageLocation.backupEnabled = true
+            store.log("settings", "Backup folder → \(u.path) (security-scoped bookmark saved)")
+            store.scheduleMirror(now: true)
+        } else { store.log("settings", "Could not create a bookmark for \(u.path)", .error) }
+    }
+    private func clearBackup() {
+        StorageLocation.resetBackup(); backupPath = ""; backupOn = false; store.backupProblem = nil; checkRows = []
+        store.log("settings", "Backup folder → not set")
+    }
+    private func checkPaths() {
+        checking = true
+        Task { checkRows = await store.checkStoragePaths(); checking = false }
     }
     private func refreshFolder() { folderPath = StorageLocation.current.path; isDefaultFolder = StorageLocation.isDefault }
 

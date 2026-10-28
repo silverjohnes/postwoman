@@ -13,6 +13,8 @@ struct RequestEditor: View {
         _sub = State(initialValue: node.uiTab); _scriptSub = State(initialValue: node.uiScriptTab)      // come back to the tab that was open
     }
     @AppStorage("showCurlPanel") private var showCurl = false
+    @AppStorage("resultPaneWidth") private var resultWidth = 460.0          // width of the result half-screen: drag its left edge
+    @State private var showResult = true          // the result half-screen; × hides it until the next send
 
     static let bodyModes: [(String, String)] = [("none", "none"), ("formdata", "form-data"), ("urlencoded", "x-www-form-urlencoded"), ("raw", "raw"), ("binary", "binary")]
 
@@ -25,20 +27,61 @@ struct RequestEditor: View {
     }
 
     var body: some View {
-        HStack(spacing: 0) {
-            editor
-            if showCurl {
-                Divider()
-                CurlPanel(node: node) { showCurl = false }.frame(width: 380)
+        GeometryReader { geo in
+            let curlW: CGFloat = showCurl ? 381 : 0
+            let maxPane = max(300, geo.size.width - curlW - 320)                // the editor always keeps at least 320 pt
+            let paneW = min(max(CGFloat(resultWidth), 300), maxPane)
+            HStack(spacing: 0) {
+                editor.frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading).clipped()
+                if let pane = resultPane {
+                    ResizeHandle(width: $resultWidth, minWidth: 300, maxWidth: maxPane)
+                    pane.frame(width: paneW).clipped()
+                }
+                if showCurl {
+                    Divider()
+                    CurlPanel(node: node) { showCurl = false }.frame(width: 380)
+                }
             }
+            .frame(width: geo.size.width, height: geo.size.height, alignment: .topLeading)
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
         .clipped()
+        .onChange(of: store.singleRunNode) { if store.singleRunNode == node.stableID { showResult = true } }
         .onChange(of: sub) { node.uiTab = sub }
         .onChange(of: scriptSub) { node.uiScriptTab = scriptSub }
         .onChange(of: store.authAlert) { if store.authAlert == node.id { sub = 1 } }
         .onAppear { if node.uiFocusURL { DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) { node.uiFocusURL = false } } }
         .onAppear { if node.uiRefocus { DispatchQueue.main.asyncAfter(deadline: .now() + 0.6) { node.uiRefocus = false } } }
+    }
+
+    /// The result of this request as sent from this tab (a mass run in the Runner tab has its own list there).
+    private var resultPane: AnyView? {
+        guard showResult else { return nil }
+        let sending = store.singleRunNode == node.stableID && store.runner.state != .idle
+        let result = store.singleResults[node.stableID]
+        guard sending || result != nil else { return nil }
+        return AnyView(
+            VStack(alignment: .leading, spacing: 6) {
+                HStack {
+                    Text("Result").font(.headline)
+                    Spacer()
+                    CloseButton(help: "Hide") { showResult = false }
+                }
+                if sending {
+                    HStack(spacing: 8) {
+                        ProgressView().controlSize(.small)
+                        Text("Sending request…").foregroundStyle(.secondary)
+                        Spacer()
+                        Button("Stop", role: .destructive) { store.runner.stop() }.controlSize(.small)
+                    }
+                    Spacer(minLength: 0)
+                } else if let r = result {
+                    ResultDetail(r: r).id(r.id)
+                }
+            }
+            .padding(10)
+            .frame(maxHeight: .infinity, alignment: .topLeading)
+        )
     }
 
     private var editor: some View {
@@ -56,7 +99,6 @@ struct RequestEditor: View {
             HStack {
                 TabStrip(items: tabs, selection: $sub)
                 Spacer(minLength: 0)
-                Text("Autosave on").font(.caption).foregroundStyle(.secondary).lineLimit(1).fixedSize()
             }
             switch sub {
             case 0: paramsTab
@@ -123,8 +165,7 @@ struct RequestEditor: View {
             case "none": Placeholder("This request does not have a body")
             case "formdata": FormEditor(rows: $node.formData)
             case "urlencoded": HeadersEditor(items: $node.urlencoded, addTitle: "Add field")
-            case "raw": CodeEditor(text: $node.body, syntax: node.rawLang == "json" ? .json : node.rawLang == "javascript" ? .javascript : .plain, autofocus: node.uiRefocus)
-                .frame(maxWidth: .infinity, maxHeight: .infinity)
+            case "raw": FoundEditor(text: $node.body, syntax: node.rawLang == "json" ? .json : node.rawLang == "javascript" ? .javascript : .plain, autofocus: node.uiRefocus)
             case "binary": binaryPane
             default: Placeholder("This body type is kept as imported and cannot be edited here")
             }
@@ -164,8 +205,11 @@ struct RequestEditor: View {
         }
     }
     func beautify() {
-        guard let b = JSONFormat.beautify(node.body) else {
-            NSSound.beep(); store.log("body", "Beautify failed for \"\(node.name)\": body is not valid JSON", .warn); return
+        let strict = JSONFormat.beautify(node.body)
+        let partial = strict == nil
+        guard let b = strict ?? JSONFormat.beautify(node.body, lenient: true) else { return }
+        if partial {      // not valid JSON: the correct parts are formatted anyway
+            NSSound.beep(); store.log("body", "Beautify of \"\(node.name)\": body is not valid JSON, only its correct parts were formatted", .warn)
         }
         if b != node.body { node.body = b; store.log("body", "Beautified JSON body of \"\(node.name)\"", .debug) }
     }
@@ -208,8 +252,8 @@ struct CurlPanel: View {
             HStack {
                 Text("curl").font(.system(.body, design: .monospaced).bold())
                 Spacer()
-                CopyButton { text }
-                Button { close() } label: { Image(systemName: "xmark") }.buttonStyle(.borderless)
+                CopyButton(curl: true) { text }
+                CloseButton { close() }
             }
             Toggle("Substitute variables", isOn: $substitute).toggleStyle(.checkbox).font(.caption)
             CodeText(text: text, syntax: .curl, size: 12).frame(maxWidth: .infinity, maxHeight: .infinity)
@@ -314,5 +358,24 @@ enum Attachments {
         try? FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
         let dest = dir.appendingPathComponent(String(UUID().uuidString.prefix(8)).lowercased() + "-" + u.lastPathComponent)
         do { try FileManager.default.copyItem(at: u, to: dest); return dest.path } catch { return u.path }
+    }
+}
+
+
+/// A thin draggable edge: dragging to the left makes the pane on its right wider.
+struct ResizeHandle: View {
+    @Binding var width: Double
+    let minWidth: CGFloat, maxWidth: CGFloat
+    @State private var start: Double?
+    var body: some View {
+        Rectangle().fill(Color.secondary.opacity(0.25)).frame(width: 1)
+            .padding(.horizontal, 3).background(Color.clear).contentShape(Rectangle())
+            .onHover { inside in if inside { NSCursor.resizeLeftRight.push() } else { NSCursor.pop() } }
+            .gesture(DragGesture(minimumDistance: 1, coordinateSpace: .global)
+                .onChanged { g in
+                    if start == nil { start = width }
+                    width = min(max((start ?? width) - Double(g.translation.width), Double(minWidth)), Double(maxWidth))
+                }
+                .onEnded { _ in start = nil })
     }
 }

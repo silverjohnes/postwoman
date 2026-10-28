@@ -31,7 +31,9 @@ enum JSONFormat {
         return out
     }
 
-    static func beautify(_ s: String, indent: Int = 4) -> String? {
+    /// `lenient`: never fails. Broken places (an unclosed string, a stray or missing bracket) are copied as they are and everything that is
+    /// correct around them is still indented. Strict mode (default) returns nil for invalid JSON.
+    static func beautify(_ s: String, indent: Int = 4, lenient: Bool = false) -> String? {
         let ch = Array(s); var out = "", level = 0, i = 0
         var stack: [Character] = []
         var afterComment = false                                     // a comment was just written: the next token starts on a new line
@@ -70,7 +72,7 @@ enum JSONFormat {
                     if ch[j] == "\"" { closed = true; break }
                     j += 1
                 }
-                if !closed { return nil }
+                if !closed { if lenient { i = ch.count; continue }; return nil }
                 i = j + 1; continue
             }
             if c == "{", i + 1 < ch.count, ch[i + 1] == "{" {         // {{variable}}
@@ -87,14 +89,19 @@ enum JSONFormat {
                 }
                 stack.append(c); out.append(c); level += 1; nl()
             case "}", "]":
-                guard let top = stack.popLast(), (top == "{") == (c == "}") else { return nil }
-                level -= 1; nl(); out.append(c)
+                if let top = stack.last, (top == "{") == (c == "}") {
+                    stack.removeLast(); level -= 1; nl(); out.append(c)
+                } else if lenient {
+                    if let k = stack.lastIndex(where: { ($0 == "{") == (c == "}") }) {      // closes an outer bracket: the inner ones stay unclosed
+                        let n = stack.count - k; stack.removeLast(n); level -= n; nl(); out.append(c)
+                    } else { out.append(c) }                                                // stray closing bracket: kept, no re-indent
+                } else { return nil }
             case ",": out.append(c); nl()
             case ":": out += ": "
             default: if !c.isWhitespace { out.append(c) }
             }
             i += 1
         }
-        return stack.isEmpty ? out : nil
+        return (stack.isEmpty || lenient) ? out : nil
     }
 }

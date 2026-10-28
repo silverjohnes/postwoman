@@ -5,7 +5,7 @@ import UniformTypeIdentifiers
 // MARK: Log tab
 struct LogTabView: View {
     @ObservedObject var logs: LogStore
-    @State private var minLevel = 0
+    @AppStorage("logMinLevel") private var minLevel = 0          // remembered between launches
     @State private var filter = ""
     var shown: [LogEntry] {
         let f = filter.lowercased()

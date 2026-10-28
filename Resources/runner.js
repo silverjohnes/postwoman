@@ -33,7 +33,8 @@ const bodyOf = b => {
     return JSON.stringify(b.toJSON());
   } catch (e) { return ''; }
 };
-const cap = s => (s.length > 1000000 ? s.slice(0, 1000000) + '\n…[truncated]' : s);
+const CAP = 32000000;          // characters of one response body handed to the app (the app shows all of it)
+const cap = s => (s.length > CAP ? s.slice(0, CAP) + '\n…[truncated at ' + CAP + ' characters]' : s);
 const kb = n => n < 1024 ? n + ' B' : (n / 1024).toFixed(1) + ' KB';
 
 
@@ -77,7 +78,7 @@ function reportVarsImpl(summary, initial, secretNames, str) {
   }
   // All variables of the app live in Globals. Scripts written for Postman use pm.environment / pm.collectionVariables as well, so every script gets one
   // line in front of its first line (line numbers in error messages stay correct) that makes the three scopes the same object.
-  const PRELUDE = "try{var __g=pm.globals;['get','set','unset','has','clear','toObject','replaceIn'].forEach(function(m){if(typeof __g[m]==='function'){var f=function(){return __g[m].apply(__g,arguments)};pm.environment[m]=f;pm.collectionVariables[m]=f}})}catch(e){};";
+  const PRELUDE = "try{var __g=pm.globals;['get','set','unset','has','clear','toObject','replaceIn'].forEach(function(m){if(typeof __g[m]==='function'){var f=function(){return __g[m].apply(__g,arguments)};pm.environment[m]=f;pm.collectionVariables[m]=f}})}catch(e){};try{var __ci=function(o,m){var f=o&&o[m];if(typeof f!=='function')return;o[m]=function(k){var r=f.apply(o,arguments);if(typeof k!=='string')return r;if(m==='get'?r!==undefined:r===true)return r;var lk=k.toLowerCase();var src=[pm.iterationData,pm.globals];for(var i=0;i<src.length;i++){try{var ob=src[i].toObject();for(var kk in ob){if(kk.toLowerCase()===lk)return m==='get'?ob[kk]:true}}catch(e){}}return r}};['globals','environment','collectionVariables','variables'].forEach(function(n){__ci(pm[n],'get');__ci(pm[n],'has')})}catch(e){};";
   // "Authorization: Basic user:{{password}}" (readable credentials, shown in the Headers tab) is encoded once the variables are known.
   const BASIC = "try{var __a=pm.request.headers.get('Authorization');if(__a&&/^Basic\\s+[^\\s]*:/.test(__a)){var __c=pm.variables.replaceIn(__a.replace(/^Basic\\s+/,''));pm.request.headers.upsert({key:'Authorization',value:'Basic '+CryptoJS.enc.Base64.stringify(CryptoJS.enc.Utf8.parse(__c))})}}catch(e){};";
   const inject = n => {

@@ -14,12 +14,15 @@ struct HistoryEntry: Identifiable {
     var failures: [String] = []           // failed tests / transport errors
     var dataRow: [String: String] = [:]   // iteration data (CSV/JSON row), if any
 
+    static let bodyCap = 4_000_000
     init(result r: ExecResult) {
         ts = r.started; runID = r.runID; iteration = r.iteration
         name = r.name; method = r.method; url = r.url
         reqHeaders = r.reqHeaders; reqBody = r.reqBody
         code = r.code; status = r.status; timeMs = r.time
-        resHeaders = r.resHeaders; resBody = r.resBody
+        resHeaders = r.resHeaders
+        // History files stay small enough to read quickly: one body is kept up to 4 MB (the Result pane shows the whole response of the run itself).
+        resBody = r.resBody.utf8.count > Self.bodyCap ? String(r.resBody.prefix(Self.bodyCap)) + "\n…[history keeps the first \(Self.bodyCap) characters]" : r.resBody
         failures = r.failures; dataRow = r.dataRow
     }
 

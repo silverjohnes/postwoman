@@ -40,7 +40,21 @@ final class Node: ObservableObject, Identifiable, Hashable {
     private var bag: AnyCancellable?
     var isRoot = false
     // what the request editor showed last (not saved): returning to the Request tab restores it
-    var uiTab = 1, uiScriptTab = 0
+    var uiScriptTab = 0
+    /// Editor tab of this request (0 Params, 1 Headers, 2 Body, 3 Scripts, 4 History): remembered per request between launches; Body when none is remembered.
+    private var _uiTab: Int?
+    var uiTab: Int {
+        get { if let t = _uiTab { return t }; let t = Node.rememberedTabs[stableID] ?? 2; _uiTab = t; return t }
+        set { _uiTab = newValue; if children == nil { Node.remember(stableID, newValue) } }
+    }
+    private static let tabsKey = "requestTabs"
+    static var rememberedTabs: [String: Int] { (UserDefaults.standard.dictionary(forKey: tabsKey) as? [String: Int]) ?? [:] }
+    private static func remember(_ id: String, _ tab: Int) {
+        var d = rememberedTabs
+        if d[id] == tab { return }
+        d[id] = tab
+        UserDefaults.standard.set(d, forKey: tabsKey)
+    }
     var uiRefocus = false
     var uiFocusURL = false
     var needsName = false                       // created with ⌘N / "New Request": the first ⌘S asks for a name
@@ -65,6 +79,18 @@ final class Node: ObservableObject, Identifiable, Hashable {
     init(name: String, folder: Bool) {
         self.name = name; if folder { children = [] }
         bag = objectWillChange.sink { Node.changed.send() }
+    }
+
+    /// Replaces the content of this request with the content of `t` (parsed from an older version): the object stays the same, so the tree and the selection stay valid.
+    func assign(from t: Node) {
+        syncing = true
+        name = t.name; method = t.method; url = t.url; params = t.params
+        syncing = false
+        headers = t.headers; body = t.body; bodyMode = t.bodyMode; rawLang = t.rawLang
+        formData = t.formData; urlencoded = t.urlencoded; binaryPath = t.binaryPath
+        preScript = t.preScript; testScript = t.testScript
+        eventKeep = t.eventKeep; eventMeta = t.eventMeta; scriptMeta = t.scriptMeta
+        extras = t.extras; requestExtras = t.requestExtras; disabledAuto = t.disabledAuto
     }
 
     // MARK: Scripts ⇄ Postman `event`
@@ -482,7 +508,7 @@ extension Node {
         func sub(_ s: String) -> String {
             guard let vars else { return s }
             var r = s
-            for v in vars where v.enabled && !v.secret && !v.key.isEmpty { r = r.replacingOccurrences(of: "{{\(v.key)}}", with: v.value) }
+            for v in vars where v.enabled && !v.secret && !v.key.isEmpty { r = r.replacingOccurrences(of: "{{\(v.key)}}", with: v.value, options: .caseInsensitive) }
             return r
         }
         var parts: [String] = ["curl"]

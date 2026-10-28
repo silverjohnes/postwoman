@@ -22,6 +22,7 @@ final class Store: ObservableObject {
     @Published var tab: MainTab = .request { didSet { log("ui", "Tab → \(tab.rawValue)", .debug) } }
     @Published var focusSearch = 0
     @Published var focusFind = 0                  // ⌘F: focus the find field of the visible result pane
+    var bodyFinds = 0                             // number of visible raw-body editors with a find field
     var findPanes = 0                             // number of visible result panes that have a find field
     /// false: the sidebar search looks at names only; true: also at URLs, headers, bodies and scripts
     @Published var searchContent = UserDefaults.standard.bool(forKey: "searchContent") {
@@ -34,6 +35,20 @@ final class Store: ObservableObject {
     var undoStack: [Data] = []
     var redoStack: [Data] = []
     var lastSnap = Data()
+    // Storage paths: a failed write to the main or the backup folder is shown next to the tabs
+    @Published var primaryProblem: String?
+    @Published var backupProblem: String?
+    var mirrorTask: Task<Void, Never>?
+    var mirrorRunning = false, mirrorAgain = false
+    // Scoped undo (⌘Z): per request (the request editor) and for the structure of the tree (the request list). The whole-app stacks above stay on ⇧⌘Z.
+    struct SNode: Equatable { let ref: Node; let name: String; let kids: [SNode]? }
+    enum Pane { case sidebar, editor }
+    var lastReq: [String: Data] = [:]
+    var reqUndo: [String: [Data]] = [:]
+    var reqRedo: [String: [Data]] = [:]
+    var lastStruct: [SNode] = []
+    var structUndo: [[SNode]] = []
+    var structRedo: [[SNode]] = []
     static weak var current: Store?
     var autosave: Bool { UserDefaults.standard.object(forKey: "autosave") as? Bool ?? true }
     @Published var authAlert: UUID?               // a run was refused because of an Authorization problem: the Headers tab highlights it
@@ -48,11 +63,20 @@ final class Store: ObservableObject {
     var scrollID: UUID?
     @Published var dataURL: URL?
     @Published var iterations = 1                 // 0 = one pass over all data rows
-    @Published var interval = 0
+    /// Interval between requests of the Runner: the last chosen value is remembered for all runs and launches.
+    @Published var interval = UserDefaults.standard.integer(forKey: "runnerInterval") {
+        didSet { if interval != oldValue { UserDefaults.standard.set(interval, forKey: "runnerInterval") } }
+    }
     @Published var error: String? { didSet { if let e = error { log("error", e, .error) } } }
     let logStore = LogStore()
     let runner = Runner()
     let history = HistoryStore(dir: { StorageLocation.current.appendingPathComponent("history") })
+    // A single request sent from the Request tab shows its result next to the editor; the Runner tab keeps the results of mass runs.
+    struct MassSnapshot { var results: [ExecResult] = []; var log = ""; var progress = "" }
+    @Published var lastRunSingle = false           // the runner currently holds the result of a single request, not of a mass run
+    @Published var massSnapshot: MassSnapshot?     // the last mass run, while a single request occupies the runner
+    @Published var singleResults: [String: ExecResult] = [:]     // request stableID → its latest result
+    @Published var singleRunNode: String?          // stableID of the request being sent right now
     @Published var autoPickResult = false         // running a single request → Runner selects its result (Res body)
     private var lastPruneAt = Date.distantPast
     private var visible: Set<UUID>?
@@ -63,6 +87,15 @@ final class Store: ObservableObject {
     var folder: URL { StorageLocation.current }
     var collectionsDir: URL { folder.appendingPathComponent("collections") }
     var globalsFile: URL { folder.appendingPathComponent("globals.json") }
+    /// The order of the collections in the sidebar (file names): remembered between launches.
+    var orderFile: URL { folder.appendingPathComponent("collections-order.json") }
+    func saveOrder() {
+        let names = roots.compactMap(\.file)
+        guard names.count == roots.count else { return }                  // a collection without a file yet: written after its first save
+        let j = JSON.arr(names.map { .str($0) })
+        if let d = try? Data(contentsOf: orderFile), JSON.parse(d) == j { return }
+        try? j.data().write(to: orderFile)
+    }
 
     func log(_ cat: String, _ msg: String, _ level: LogLevel = .info) { logStore.add(LogEntry(level: level, cat: cat, msg: msg)) }
     let vault = SecretVault.shared
@@ -80,6 +113,11 @@ final class Store: ObservableObject {
         Store.current = self
         load()
         // Autosave: any edit (nodes, tree, globals) → write after 1 s of quiet (see Store+Saving.swift for what is held back); undo snapshots after 0.5 s.
+        runner.$results.sink { [weak self] r in MainActor.assumeIsolated {
+            guard let self, self.lastRunSingle else { return }
+            for x in r where !x.nodeID.isEmpty { self.singleResults[x.nodeID] = x }
+        } }.store(in: &bag)
+        history.$tick.dropFirst().sink { [weak self] _ in MainActor.assumeIsolated { self?.scheduleMirror() } }.store(in: &bag)
         Publishers.Merge3(Node.changed, $globals.dropFirst().map { _ in () }, $roots.dropFirst().map { _ in () })
             .debounce(for: .seconds(1), scheduler: RunLoop.main)
             .sink { [weak self] in MainActor.assumeIsolated { self?.autosaveTick() } }.store(in: &bag)
@@ -90,6 +128,7 @@ final class Store: ObservableObject {
             .sink { [weak self] in MainActor.assumeIsolated { if self?.visible != nil { self?.recompute(keepIndex: true) } } }.store(in: &bag)
         runner.$state.dropFirst().removeDuplicates().sink { [weak self] s in
             guard let self, s == .idle else { return }
+            self.singleRunNode = nil
             self.pruneHistory(reason: "after run")
             if self.runUsedData, self.runner.completed {                // the list of a finished run is used up: later runs start without it
                 self.dataURL = nil; self.iterations = 1
@@ -105,7 +144,12 @@ final class Store: ObservableObject {
         roots = []; globals = []; selected = []; primary = nil
         let fm = FileManager.default
         try? fm.createDirectory(at: collectionsDir, withIntermediateDirectories: true)
-        let files = (try? fm.contentsOfDirectory(atPath: collectionsDir.path))?.filter { $0.hasSuffix(".json") }.sorted() ?? []
+        let allFiles = (try? fm.contentsOfDirectory(atPath: collectionsDir.path))?.filter { $0.hasSuffix(".json") && $0 != "collections-order.json" }.sorted() ?? []
+        let saved = ((try? Data(contentsOf: orderFile)).flatMap { JSON.parse($0) }?.list ?? []).compactMap(\.text)
+        let files = allFiles.sorted { a, b in                              // remembered order first, new files after (alphabetical)
+            let i = saved.firstIndex(of: a) ?? Int.max, k = saved.firstIndex(of: b) ?? Int.max
+            return i != k ? i < k : a < b
+        }
         var converted = false
         for f in files {
             if let d = try? Data(contentsOf: collectionsDir.appendingPathComponent(f)), let j = JSON.parse(d) {
@@ -123,8 +167,9 @@ final class Store: ObservableObject {
         expanded = Set(roots.map(\.id)); recompute()
         for r in roots { for q in r.requests() { q.savedItem = q.toJSON() }; savedSkeleton[r.id] = skeleton(r) }
         savedGlobals = globalsJSON().compactData()
-        undoStack = []; redoStack = []; lastSnap = snapshot(); refreshKnownVars()
+        undoStack = []; redoStack = []; lastSnap = snapshot(); resetScoped(); refreshKnownVars()
         log("storage", "Loaded \(roots.count) collection(s), \(globals.count) global(s) from \(folder.path)")
+        scheduleMirror(now: true)
         if converted { log("storage", "Authorization converted to Headers for older collections (one-time migration)", .warn); saveAll() }
         if roots.contains(where: { $0.requests().contains { !$0.hadStoredID } }) {
             log("storage", "Gave history ids to requests of older collection files (one-time; the files stay valid Postman collections)")
@@ -332,7 +377,7 @@ final class Store: ObservableObject {
             for n in moving { roots.forEach { $0.remove(n) } }
             if !insert(moving, near: target, pos: pos) { return }
         }
-        objectWillChange.send(); recompute(); autosaveTick()
+        objectWillChange.send(); recompute(); autosaveTick(); saveOrder()
         log("tree", "Moved " + moving.map(\.name).joined(separator: ", ") + " → \"\(target.name)\" (\(pos))")
     }
 
@@ -359,7 +404,7 @@ final class Store: ObservableObject {
     func add(folder: Bool) {
         let parent = container()
         let n = Node(name: folder ? "New Folder" : "New Request", folder: folder)
-        n.uiFocusURL = !folder; n.uiTab = 0; n.needsName = !folder
+        n.uiFocusURL = !folder; n.needsName = !folder
         tab = .request
         parent.children?.insert(n, at: 0); expanded.insert(parent.id)            // on top: visible at once in a long list
         selected = [n]; primary = n; objectWillChange.send(); recompute()
@@ -423,14 +468,17 @@ final class Store: ObservableObject {
         let single = tab == .request && n.children == nil
         let data = single ? nil : dataURL
         let iters = single ? 1 : iterations
-        tab = .runner
+        if !single { tab = .runner }                  // a single request stays in the Request tab: its result is shown there
         let rows = data.map { Runner.loadRows($0).count } ?? 0
         let count = iters == 0 ? max(1, rows) : iters
         if let why = EmbeddedRuntime.problem() { error = why; return }
         let col = Node.scoped(root: root, target: n)
         let secretCount = globals.filter { $0.enabled && $0.secret && !$0.value.isEmpty }.count
         log("run", "Run \"\(n.name)\" (\(n.children == nil ? "request" : n.isRoot ? "collection" : "folder"), \(col.dict["item"]?.list.count ?? 0) top-level item(s)); data: \(data?.lastPathComponent ?? "none"), \(globals.filter(\.enabled).count) global(s), \(secretCount) secret")
-        guard runner.state == .idle, !preparingRun else { return }
+        guard runner.state == .idle, !preparingRun else {
+            log("run", "Not started: the previous run is still \(preparingRun ? "being prepared" : runner.state == .paused ? "paused" : "active") — stop it first", .warn)
+            NSSound.beep(); return
+        }
         preparingRun = true
         // Secret variables: authenticate once per launch, decrypt in memory, hand them to node through a pipe (never a file).
         Task {
@@ -441,6 +489,10 @@ final class Store: ObservableObject {
                 catch { self.error = error.localizedDescription; log("vault", "Run not started: \(error.localizedDescription)", .error); return }
             }
             runUsedData = data != nil
+            if single {
+                if !lastRunSingle { massSnapshot = MassSnapshot(results: runner.results, log: runner.log, progress: runner.progress) }
+                lastRunSingle = true; singleRunNode = n.stableID
+            } else { lastRunSingle = false; massSnapshot = nil; singleRunNode = nil }
             runner.start(collection: col, globals: globals, secrets: secrets, dataURL: data,
                          iterations: count, intervalMs: interval, timeoutSec: timeoutSec)
         }
@@ -452,10 +504,10 @@ final class Store: ObservableObject {
         var plain: [String] = [], removed: [String] = [], pending: [(key: String, value: String)] = []
         for c in changes {
             if c.remove {
-                if let i = globals.firstIndex(where: { $0.key == c.key }) { globals.remove(at: i); removed.append(c.key) }
-            } else if c.secret || globals.first(where: { $0.key == c.key })?.secret == true {
+                if let i = globals.firstIndex(where: { $0.key.caseInsensitiveCompare(c.key) == .orderedSame }) { globals.remove(at: i); removed.append(c.key) }
+            } else if c.secret || globals.first(where: { $0.key.caseInsensitiveCompare(c.key) == .orderedSame })?.secret == true {
                 pending.append((c.key, c.value))
-            } else if let i = globals.firstIndex(where: { $0.key == c.key }) {
+            } else if let i = globals.firstIndex(where: { $0.key.caseInsensitiveCompare(c.key) == .orderedSame }) {
                 globals[i].value = c.value; globals[i].enabled = true; plain.append(c.key)
             } else {
                 globals.append(Var(key: c.key, value: c.value)); plain.append(c.key)
@@ -473,7 +525,7 @@ final class Store: ObservableObject {
             do {
                 let key = try await self.vault.unlock(reason: L("Unlock secret variables"))
                 for p in pending {
-                    guard let i = self.globals.firstIndex(where: { $0.key == p.key }) else { continue }
+                    guard let i = self.globals.firstIndex(where: { $0.key.caseInsensitiveCompare(p.key) == .orderedSame }) else { continue }
                     if p.value.isEmpty {
                         self.globals[i].value = ""
                     } else {

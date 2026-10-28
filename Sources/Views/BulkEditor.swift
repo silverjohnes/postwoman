@@ -33,7 +33,7 @@ struct BulkEditor: View {
                     Toggle("Also set Content-Type", isOn: $setCT)
                     if json {
                         JSONStatus(text: body_)
-                        Button("Beautify") { if let b = JSONFormat.beautify(body_) { body_ = b } else { NSSound.beep() } }
+                        Button("Beautify") { if let b = JSONFormat.beautify(body_) { body_ = b } else { NSSound.beep(); if let b = JSONFormat.beautify(body_, lenient: true) { body_ = b } } }
                             .disabled(body_.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
                     }
                 }
