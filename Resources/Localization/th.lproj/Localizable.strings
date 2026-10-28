@@ -231,3 +231,4 @@
 "Select several: ⇧-click selects a range, ⌘-click adds or removes" = "เลือกหลายรายการ: ⇧-คลิกเลือกช่วง ⌘-คลิกเพิ่มหรือเอาออก";
 "Delete the selected executions in History" = "ลบการรันที่เลือกในประวัติ";
 "Unsaved" = "ยังไม่บันทึก";
+"Bulk edit" = "แก้ไขเป็นชุด";

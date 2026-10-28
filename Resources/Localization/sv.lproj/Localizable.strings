@@ -231,3 +231,4 @@
 "Select several: ⇧-click selects a range, ⌘-click adds or removes" = "Flera val: ⇧-klick markerar ett intervall, ⌘-klick lägger till eller tar bort";
 "Delete the selected executions in History" = "Radera de markerade körningarna i Historik";
 "Unsaved" = "Osparat";
+"Bulk edit" = "Massredigering";

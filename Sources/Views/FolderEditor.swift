@@ -14,7 +14,7 @@ struct FolderEditor: View {
                 Spacer()
                 Button("Run") { store.run() }.buttonStyle(.borderedProminent)
             }
-            Picker("", selection: $mode) { Text("Headers (inherited)").tag(0); Text("Bulk edit requests").tag(1) }.pickerStyle(.segmented).labelsHidden().frame(width: 360)
+            Picker("", selection: $mode) { Text("Headers").tag(0); Text("Bulk edit").tag(1) }.pickerStyle(.segmented).labelsHidden().frame(width: 360)
             if mode == 0 {
                 Text("Applied automatically to every nested request and shown there as read-only. A request's own header with the same name overrides it. When exporting, they are written into each request.")
                     .font(.caption).foregroundStyle(.secondary)

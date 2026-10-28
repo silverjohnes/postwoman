@@ -231,3 +231,4 @@
 "Select several: ⇧-click selects a range, ⌘-click adds or removes" = "多选：⇧-点按选择范围，⌘-点按添加或移除";
 "Delete the selected executions in History" = "删除历史记录中所选的执行";
 "Unsaved" = "未存储";
+"Bulk edit" = "批量编辑";
