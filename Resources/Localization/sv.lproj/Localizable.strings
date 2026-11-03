@@ -264,3 +264,4 @@
 "Backup storage path. When switched on, every change is written to both folders. A cloud folder can be used as the backup." = "Reservsökväg för lagring. När den är på skrivs varje ändring till båda mapparna. En molnmapp kan användas som reserv.";
 "Formatting…" = "Formaterar…";
 "Save response body…" = "Spara svarstext…";
+"<empty>" = "<tomt>";

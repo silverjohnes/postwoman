@@ -264,3 +264,4 @@
 "Backup storage path. When switched on, every change is written to both folders. A cloud folder can be used as the backup." = "Ruta de almacenamiento de respaldo. Si está activada, cada cambio se escribe en ambas carpetas. Como respaldo se puede usar una carpeta en la nube.";
 "Formatting…" = "Dando formato…";
 "Save response body…" = "Guardar cuerpo de la respuesta…";
+"<empty>" = "<vacío>";

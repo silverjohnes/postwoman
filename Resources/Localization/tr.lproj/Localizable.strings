@@ -264,3 +264,4 @@
 "Backup storage path. When switched on, every change is written to both folders. A cloud folder can be used as the backup." = "Yedek depolama yolu. Açıksa her değişiklik iki klasöre de yazılır. Yedek olarak bir bulut klasörü kullanılabilir.";
 "Formatting…" = "Biçimlendiriliyor…";
 "Save response body…" = "Yanıt gövdesini kaydet…";
+"<empty>" = "<boş>";

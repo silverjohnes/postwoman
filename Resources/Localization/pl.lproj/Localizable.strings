@@ -264,3 +264,4 @@
 "Backup storage path. When switched on, every change is written to both folders. A cloud folder can be used as the backup." = "Zapasowa ścieżka przechowywania. Gdy opcja jest włączona, każda zmiana jest zapisywana w obu folderach. Jako kopii zapasowej można użyć folderu w chmurze.";
 "Formatting…" = "Formatowanie…";
 "Save response body…" = "Zapisz treść odpowiedzi…";
+"<empty>" = "<puste>";

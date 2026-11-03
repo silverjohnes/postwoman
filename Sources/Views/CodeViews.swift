@@ -17,7 +17,7 @@ enum HTTPText {
 
     /// `limit: 0` = the body is already formatted. `withHeaders: false` = only the body.
     static func request(method: String, url: String, headers: [KV], body: String, limit: Int = quickPretty, withHeaders: Bool = true) -> String {
-        guard withHeaders else { return pretty(body, limit: limit) }
+        guard withHeaders else { return body.isEmpty ? L("<empty>") : pretty(body, limit: limit) }
         var s = "\(method) \(url)"
         if !headers.isEmpty { s += "\n" + lines(headers) }
         if !body.isEmpty { s += "\n\n" + pretty(body, limit: limit) }
@@ -26,7 +26,7 @@ enum HTTPText {
     static func response(code: Int, status: String, headers: [KV], body: String, error: [String] = [], limit: Int = quickPretty, withHeaders: Bool = true) -> String {
         guard withHeaders else {
             if !body.isEmpty { return pretty(body, limit: limit) }
-            return code == 0 ? error.joined(separator: "\n") : ""
+            return code == 0 && !error.isEmpty ? error.joined(separator: "\n") : L("<empty>")
         }
         var s = code == 0 ? "ERR" : "HTTP \(code) \(status)"
         if !headers.isEmpty { s += "\n" + lines(headers) }
@@ -36,31 +36,104 @@ enum HTTPText {
     }
 }
 
-/// Marks every hit of `find` (yellow, the current one orange) with layout-manager temporary attributes and scrolls to the current one.
-/// `previous` holds the ranges marked last time: only those are cleared (other temporary colours, e.g. {{variables}}, stay).
+/// Ranges currently marked in one text view (so that only they are cleared next time).
+final class MarkState { var find: [NSRange] = []; var occ: [NSRange] = [] }
+
+/// Marks, with layout-manager temporary attributes (no text edits): every hit of `find` (yellow, the current one orange, scrolled to) and every
+/// other place where the text that is selected right now occurs (soft teal). The same hits are drawn as ticks on the scroll bar.
 enum FindMarks {
-    @MainActor static func apply(_ tv: NSTextView, find: String, index: Int, scroll: Bool, previous: inout [NSRange]) -> Int {
+    static let occCap = 8_000_000                 // longer texts: no "same text" marks (a search per selection would be slow)
+    static func selectedText(_ tv: NSTextView) -> String {
+        let r = tv.selectedRange()
+        guard r.length >= 2, r.length <= 200 else { return "" }
+        let ns = tv.string as NSString
+        guard NSMaxRange(r) <= ns.length else { return "" }
+        let t = ns.substring(with: r)
+        return t.contains("\n") || t.trimmingCharacters(in: .whitespaces).isEmpty ? "" : t
+    }
+    @MainActor static func apply(_ tv: NSTextView, find: String, index: Int, scroll: Bool, selected: String, state: MarkState, ruler: FindRulerView?) -> Int {
         guard let lm = tv.layoutManager else { return 0 }
         let ns = tv.string as NSString
-        for r in previous where NSMaxRange(r) <= ns.length { lm.removeTemporaryAttribute(.backgroundColor, forCharacterRange: r) }
+        for r in state.find + state.occ where NSMaxRange(r) <= ns.length { lm.removeTemporaryAttribute(.backgroundColor, forCharacterRange: r) }
+        func search(_ q: String, _ o: NSString.CompareOptions) -> [NSRange] {
+            var out: [NSRange] = []; var loc = 0
+            while loc < ns.length, out.count < 5000 {
+                let r = ns.range(of: q, options: o, range: NSRange(location: loc, length: ns.length - loc))
+                if r.location == NSNotFound || r.length == 0 { break }
+                out.append(r); loc = NSMaxRange(r)
+            }
+            return out
+        }
+        let occ = selected.isEmpty || ns.length > occCap ? [] : search(selected, [])
+        // typed on the other keyboard layout (RU ↔ EN) is searched as well, like in the collection search
         var hits: [NSRange] = []
         if !find.isEmpty {
-            var loc = 0
-            while loc < ns.length, hits.count < 5000 {
-                let r = ns.range(of: find, options: .caseInsensitive, range: NSRange(location: loc, length: ns.length - loc))
-                if r.location == NSNotFound || r.length == 0 { break }
-                hits.append(r); loc = NSMaxRange(r)
-            }
+            for v in Node.layoutVariants(find) where !v.isEmpty { hits += search(v, .caseInsensitive) }
+            hits.sort { $0.location != $1.location ? $0.location < $1.location : $0.length > $1.length }
+            var merged: [NSRange] = []
+            for r in hits where merged.last.map({ NSMaxRange($0) <= r.location }) ?? true { merged.append(r) }      // drop overlapping duplicates
+            hits = Array(merged.prefix(5000))
         }
+        for r in occ { lm.addTemporaryAttribute(.backgroundColor, value: NSColor.systemTeal.withAlphaComponent(0.3), forCharacterRange: r) }
         for r in hits { lm.addTemporaryAttribute(.backgroundColor, value: NSColor.systemYellow.withAlphaComponent(0.45), forCharacterRange: r) }
-        if !hits.isEmpty {
-            let cur = hits[min(max(0, index), hits.count - 1)]
-            lm.addTemporaryAttribute(.backgroundColor, value: NSColor.systemOrange.withAlphaComponent(0.85), forCharacterRange: cur)
-            if scroll { tv.scrollRangeToVisible(cur) }
+        let cur = hits.isEmpty ? -1 : min(max(0, index), hits.count - 1)
+        if cur >= 0 {
+            lm.addTemporaryAttribute(.backgroundColor, value: NSColor.systemOrange.withAlphaComponent(0.85), forCharacterRange: hits[cur])
+            if scroll { tv.scrollRangeToVisible(hits[cur]) }
         }
-        previous = hits
+        state.find = hits; state.occ = occ
+        if let ruler {
+            // position on the scroll bar: exact up to 300 000 characters, proportional to the offset for bigger texts
+            func ratios(_ rs: [NSRange]) -> [CGFloat] {
+                guard !rs.isEmpty, let tc = tv.textContainer else { return [] }
+                if ns.length <= 300_000 {
+                    let h = max(1, lm.usedRect(for: tc).height)
+                    return rs.map { r in
+                        let g = lm.glyphRange(forCharacterRange: r, actualCharacterRange: nil)
+                        return min(1, max(0, lm.boundingRect(forGlyphRange: g, in: tc).midY / h))
+                    }
+                }
+                return rs.map { CGFloat($0.location) / CGFloat(max(1, ns.length)) }
+            }
+            ruler.set(find: ratios(hits), current: cur, occ: ratios(occ))
+        }
         return hits.count
     }
+}
+
+/// Thin strip over the vertical scroll bar: a tick for every find hit (current one orange) and for every other place of the selected text.
+/// Clicks pass through to the scroller underneath.
+final class FindRulerView: NSView {
+    private var find: [CGFloat] = [], occ: [CGFloat] = []
+    private var current = -1
+    override var isFlipped: Bool { true }
+    override func hitTest(_ point: NSPoint) -> NSView? { nil }
+    func set(find f: [CGFloat], current c: Int, occ o: [CGFloat]) { find = f; current = c; occ = o; needsDisplay = true }
+    override func draw(_ dirty: NSRect) {
+        let h = bounds.height - 4
+        NSColor.systemTeal.setFill()
+        for r in occ { NSRect(x: 3, y: 2 + r * h - 1, width: bounds.width - 6, height: 2).fill() }
+        NSColor.systemYellow.setFill()
+        for (i, r) in find.enumerated() where i != current { NSRect(x: 2, y: 2 + r * h - 1, width: bounds.width - 4, height: 2).fill() }
+        if find.indices.contains(current) { NSColor.systemOrange.setFill(); NSRect(x: 1, y: 2 + find[current] * h - 2, width: bounds.width - 2, height: 4).fill() }
+    }
+}
+
+/// A scroll view with the ruler laid over its right edge (above the scroller, so the ticks are always visible).
+final class FindContainer: NSView {
+    let scroll: NSScrollView
+    let ruler = FindRulerView()
+    init(scroll sv: NSScrollView) {
+        scroll = sv
+        super.init(frame: .zero)
+        for v in [sv, ruler] { v.translatesAutoresizingMaskIntoConstraints = false; addSubview(v) }
+        NSLayoutConstraint.activate([
+            sv.leadingAnchor.constraint(equalTo: leadingAnchor), sv.trailingAnchor.constraint(equalTo: trailingAnchor),
+            sv.topAnchor.constraint(equalTo: topAnchor), sv.bottomAnchor.constraint(equalTo: bottomAnchor),
+            ruler.trailingAnchor.constraint(equalTo: trailingAnchor), ruler.topAnchor.constraint(equalTo: topAnchor),
+            ruler.bottomAnchor.constraint(equalTo: bottomAnchor), ruler.widthAnchor.constraint(equalToConstant: 12)])
+    }
+    required init?(coder: NSCoder) { fatalError() }
 }
 
 // MARK: Read-only selectable text for big responses
@@ -79,7 +152,20 @@ struct CodeText: NSViewRepresentable {
 
     final class Coord: NSObject, @unchecked Sendable {
         var last: String?; var lastSyntax: Syntax?; var lastFind = ""; var lastIdx = -1
-        var marks: [NSRange] = []                 // ranges of the current find hits
+        let marks = MarkState()
+        var ruler: FindRulerView?
+        weak var tv: NSTextView?
+        var pend: DispatchWorkItem?
+        /// The selection moved: after a short pause mark the same text elsewhere.
+        @objc func selChanged(_ n: Notification) {
+            pend?.cancel()
+            let w = DispatchWorkItem { [weak self] in MainActor.assumeIsolated { self?.refreshMarks() } }
+            pend = w; DispatchQueue.main.asyncAfter(deadline: .now() + 0.2, execute: w)
+        }
+        @MainActor func refreshMarks() {
+            guard let tv else { return }
+            _ = FindMarks.apply(tv, find: lastFind, index: lastIdx, scroll: false, selected: FindMarks.selectedText(tv), state: marks, ruler: ruler)
+        }
         var spans: [(NSRange, NSColor)] = []      // sorted by location
         var applied = Set<Int>()                  // chunks (of `chunk` characters) that are coloured already
         var gen = 0                               // bumped with every new text: late results of the colouring task are dropped
@@ -115,7 +201,7 @@ struct CodeText: NSViewRepresentable {
     }
     func makeCoordinator() -> Coord { Coord() }
 
-    func makeNSView(context: Context) -> NSScrollView {
+    func makeNSView(context: Context) -> NSView {
         let storage = NSTextStorage()
         let lm = NSLayoutManager()
         lm.allowsNonContiguousLayout = true
@@ -145,20 +231,24 @@ struct CodeText: NSViewRepresentable {
         sv.contentView.postsBoundsChangedNotifications = true
         context.coordinator.scroll = sv
         NotificationCenter.default.addObserver(context.coordinator, selector: #selector(Coord.scrolled), name: NSView.boundsDidChangeNotification, object: sv.contentView)
-        return sv
+        let box = FindContainer(scroll: sv)
+        context.coordinator.ruler = box.ruler; context.coordinator.tv = tv
+        NotificationCenter.default.addObserver(context.coordinator, selector: #selector(Coord.selChanged(_:)), name: NSTextView.didChangeSelectionNotification, object: tv)
+        return box
     }
-    static func dismantleNSView(_ sv: NSScrollView, coordinator: Coord) {
+    static func dismantleNSView(_ nv: NSView, coordinator: Coord) {
         NotificationCenter.default.removeObserver(coordinator)
+        coordinator.pend?.cancel()
         coordinator.gen += 1
     }
 
-    func updateNSView(_ sv: NSScrollView, context: Context) {
-        guard let tv = sv.documentView as? NSTextView, let lm = tv.layoutManager, let storage = tv.textStorage else { return }
+    func updateNSView(_ nv: NSView, context: Context) {
+        guard let sv = (nv as? FindContainer)?.scroll, let tv = sv.documentView as? NSTextView, let lm = tv.layoutManager, let storage = tv.textStorage else { return }
         let c = context.coordinator
         let changed = c.last != text || c.lastSyntax != syntax
         if changed {
             c.last = text; c.lastSyntax = syntax
-            c.gen += 1; c.spans = []; c.applied = []; c.marks = []
+            c.gen += 1; c.spans = []; c.applied = []; c.marks.find = []; c.marks.occ = []
             lm.removeTemporaryAttribute(.foregroundColor, forCharacterRange: NSRange(location: 0, length: (tv.string as NSString).length))
             lm.removeTemporaryAttribute(.backgroundColor, forCharacterRange: NSRange(location: 0, length: (tv.string as NSString).length))
             var shown = text
@@ -189,7 +279,7 @@ struct CodeText: NSViewRepresentable {
         }
         if changed || c.lastFind != find || c.lastIdx != findIndex {
             c.lastFind = find; c.lastIdx = findIndex
-            let n = FindMarks.apply(tv, find: find, index: findIndex, scroll: true, previous: &c.marks)
+            let n = FindMarks.apply(tv, find: find, index: findIndex, scroll: true, selected: FindMarks.selectedText(tv), state: c.marks, ruler: c.ruler)
             if let onCount { DispatchQueue.main.async { onCount(n) } }
         }
     }

@@ -264,3 +264,4 @@
 "Backup storage path. When switched on, every change is written to both folders. A cloud folder can be used as the backup." = "备份存储路径。开启后，每次更改都会写入两个文件夹。可以使用云端文件夹作为备份。";
 "Formatting…" = "正在格式化…";
 "Save response body…" = "保存响应正文…";
+"<empty>" = "<空>";

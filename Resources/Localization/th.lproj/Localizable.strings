@@ -264,3 +264,4 @@
 "Backup storage path. When switched on, every change is written to both folders. A cloud folder can be used as the backup." = "เส้นทางจัดเก็บสำรอง เมื่อเปิดใช้ ทุกการเปลี่ยนแปลงจะถูกเขียนลงทั้งสองโฟลเดอร์ สามารถใช้โฟลเดอร์คลาวด์เป็นที่สำรองได้";
 "Formatting…" = "กำลังจัดรูปแบบ…";
 "Save response body…" = "บันทึกเนื้อหาการตอบกลับ…";
+"<empty>" = "<ว่าง>";

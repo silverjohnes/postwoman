@@ -13,7 +13,15 @@ struct CodeEditor: NSViewRepresentable {
     final class Coord: NSObject, NSTextViewDelegate {
         var parent: CodeEditor
         var shown: Syntax?
-        var marks: [NSRange] = []
+        let marks = MarkState()
+        var ruler: FindRulerView?
+        weak var tv: NSTextView?
+        var pend: DispatchWorkItem?
+        @objc func selChanged(_ n: Notification) {          // the same text as the selection is marked elsewhere (after a short pause)
+            pend?.cancel()
+            let w = DispatchWorkItem { [weak self] in MainActor.assumeIsolated { if let self, let tv = self.tv { self.remark(tv, scroll: false) } } }
+            pend = w; DispatchQueue.main.asyncAfter(deadline: .now() + 0.2, execute: w)
+        }
         var lastFind = "", lastIdx = -1
         /// Each editor owns its undo stack. With the window's shared manager, entries of an editor that SwiftUI has already destroyed
         /// (switching requests, ⌘Z of the request tree) pointed at freed memory and crashed on the next ⌘Z.
@@ -24,21 +32,23 @@ struct CodeEditor: NSViewRepresentable {
             guard let tv = n.object as? NSTextView else { return }
             if parent.text != tv.string { parent.text = tv.string }
             if !tv.hasMarkedText(), let st = tv.textStorage { Highlighter.apply(to: st, syntax: parent.syntax, size: 12) }
-            if !parent.find.isEmpty || !marks.isEmpty { MainActor.assumeIsolated { remark(tv, scroll: false) } }       // typing moves the hits
+            if !parent.find.isEmpty || !marks.find.isEmpty || !marks.occ.isEmpty { MainActor.assumeIsolated { remark(tv, scroll: false) } }       // typing moves the hits
         }
         @MainActor func remark(_ tv: NSTextView, scroll: Bool) {
             lastFind = parent.find; lastIdx = parent.findIndex
-            let n = FindMarks.apply(tv, find: parent.find, index: parent.findIndex, scroll: scroll, previous: &marks)
+            let n = FindMarks.apply(tv, find: parent.find, index: parent.findIndex, scroll: scroll, selected: FindMarks.selectedText(tv), state: marks, ruler: ruler)
             if let cb = parent.onCount { DispatchQueue.main.async { cb(n) } }
         }
     }
     func makeCoordinator() -> Coord { Coord(self) }
-    static func dismantleNSView(_ sv: NSScrollView, coordinator: Coord) {
+    static func dismantleNSView(_ nv: NSView, coordinator: Coord) {
         coordinator.undo.removeAllActions()
-        (sv.documentView as? NSTextView)?.delegate = nil
+        NotificationCenter.default.removeObserver(coordinator)
+        coordinator.pend?.cancel()
+        ((nv as? FindContainer)?.scroll.documentView as? NSTextView)?.delegate = nil
     }
 
-    func makeNSView(context: Context) -> NSScrollView {
+    func makeNSView(context: Context) -> NSView {
         let sv = NSScrollView()
         sv.hasVerticalScroller = true; sv.hasHorizontalScroller = false; sv.autohidesScrollers = true; sv.borderType = .lineBorder
         let tv = CommentTextView(frame: NSRect(x: 0, y: 0, width: 400, height: 300))
@@ -67,11 +77,14 @@ struct CodeEditor: NSViewRepresentable {
         if autofocus {
             DispatchQueue.main.async { sv.window?.makeFirstResponder(tv); tv.setSelectedRange(NSRange(location: (tv.string as NSString).length, length: 0)) }
         }
-        return sv
+        let box = FindContainer(scroll: sv)
+        context.coordinator.ruler = box.ruler; context.coordinator.tv = tv
+        NotificationCenter.default.addObserver(context.coordinator, selector: #selector(Coord.selChanged(_:)), name: NSTextView.didChangeSelectionNotification, object: tv)
+        return box
     }
-    func updateNSView(_ sv: NSScrollView, context: Context) {
+    func updateNSView(_ nv: NSView, context: Context) {
         context.coordinator.parent = self
-        guard let tv = sv.documentView as? NSTextView else { return }
+        guard let sv = (nv as? FindContainer)?.scroll, let tv = sv.documentView as? NSTextView else { return }
         (tv as? CommentTextView)?.commentable = syntax == .javascript
         let c = context.coordinator
         if tv.string == text {
@@ -85,7 +98,7 @@ struct CodeEditor: NSViewRepresentable {
         tv.string = text
         if let st = tv.textStorage { Highlighter.apply(to: st, syntax: syntax, size: 12) }
         tv.setSelectedRange(NSRange(location: min(sel.location, (text as NSString).length), length: 0))
-        c.marks = []; if !find.isEmpty { c.remark(tv, scroll: false) }
+        c.marks.find = []; c.marks.occ = []; if !find.isEmpty { c.remark(tv, scroll: false) }
     }
 }
 

@@ -264,3 +264,4 @@
 "Backup storage path. When switched on, every change is written to both folders. A cloud folder can be used as the backup." = "Sicherungspfad für die Speicherung. Wenn aktiviert, wird jede Änderung in beide Ordner geschrieben. Als Sicherung kann ein Cloud-Ordner verwendet werden.";
 "Formatting…" = "Formatierung…";
 "Save response body…" = "Antworttext speichern…";
+"<empty>" = "<leer>";

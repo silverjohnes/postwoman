@@ -264,3 +264,4 @@
 "Backup storage path. When switched on, every change is written to both folders. A cloud folder can be used as the backup." = "ব্যাকআপ সংরক্ষণের পথ। চালু থাকলে প্রতিটি পরিবর্তন উভয় ফোল্ডারে লেখা হয়। ক্লাউড ফোল্ডার ব্যাকআপ হিসেবে ব্যবহার করা যেতে পারে।";
 "Formatting…" = "ফরম্যাট হচ্ছে…";
 "Save response body…" = "রেসপন্স বডি সংরক্ষণ করুন…";
+"<empty>" = "<খালি>";

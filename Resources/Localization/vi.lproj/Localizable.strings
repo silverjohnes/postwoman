@@ -264,3 +264,4 @@
 "Backup storage path. When switched on, every change is written to both folders. A cloud folder can be used as the backup." = "Đường dẫn lưu trữ dự phòng. Khi bật, mọi thay đổi được ghi vào cả hai thư mục. Có thể dùng thư mục đám mây làm bản dự phòng.";
 "Formatting…" = "Đang định dạng…";
 "Save response body…" = "Lưu nội dung phản hồi…";
+"<empty>" = "<trống>";
