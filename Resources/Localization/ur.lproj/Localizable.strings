@@ -264,3 +264,4 @@
 "Backup storage path. When switched on, every change is written to both folders. A cloud folder can be used as the backup." = "بیک اپ اسٹوریج کا راستہ۔ آن ہونے پر ہر تبدیلی دونوں فولڈرز میں لکھی جاتی ہے۔ بیک اپ کے طور پر کلاؤڈ فولڈر استعمال کیا جا سکتا ہے۔";
 "Formatting…" = "فارمیٹ ہو رہا ہے…";
 "Save response body…" = "جوابی باڈی محفوظ کریں…";
+"<empty>" = "<خالی>";

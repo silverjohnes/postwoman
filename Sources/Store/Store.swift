@@ -17,6 +17,8 @@ final class Store: ObservableObject {
     @Published var globals: [Var] = []
     @Published var selected: Set<Node> = []
     @Published var primary: Node?                 // last clicked; the Runner target
+    @Published var editingID: UUID?                 // the row that is being renamed in the list
+    var saveAfterRename = false
     @Published var query = "" { didSet { recompute(); if !queryTrimmed.isEmpty { log("search", "'\(queryTrimmed)' (also as \(Node.layoutVariants(queryTrimmed).dropFirst().joined(separator: " / "))) → \(matches.count) match(es)", .debug) } } }
     @Published var expanded: Set<UUID> = []
     @Published var tab: MainTab = .request { didSet { log("ui", "Tab → \(tab.rawValue)", .debug) } }
@@ -257,13 +259,18 @@ final class Store: ObservableObject {
         }
         return out
     }
-    func rename() {
+    /// Rename happens right in the list: the row turns into a text field (see NodeRow).
+    func rename(thenSave: Bool = false) {
         guard let n = primary else { return }
-        let a = NSAlert(); a.messageText = L("Rename"); a.addButton(withTitle: L("OK")); a.addButton(withTitle: L("Cancel"))
-        let f = NSTextField(frame: NSRect(x: 0, y: 0, width: 260, height: 24)); f.stringValue = n.name; a.accessoryView = f
-        a.window.initialFirstResponder = f
-        if a.runModal() == .alertFirstButtonReturn, !f.stringValue.isEmpty { log("tree", "Renamed \"\(n.name)\" → \"\(f.stringValue)\""); n.name = f.stringValue; recompute() }
+        saveAfterRename = thenSave; editingID = n.id
     }
+    func commitRename(_ n: Node, _ text: String) {
+        let name = text.trimmingCharacters(in: .whitespaces), then = saveAfterRename
+        editingID = nil; saveAfterRename = false
+        if !name.isEmpty, name != n.name { log("tree", "Renamed \"\(n.name)\" → \"\(name)\""); n.name = name; recompute() }
+        if then { performSave() }
+    }
+    func cancelRename() { editingID = nil; saveAfterRename = false }
     func duplicate() {
         guard let n = primary else { return }
         let c = n.copy()

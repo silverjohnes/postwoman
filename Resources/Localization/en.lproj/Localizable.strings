@@ -264,3 +264,4 @@
 "Backup storage path. When switched on, every change is written to both folders. A cloud folder can be used as the backup." = "Backup storage path. When switched on, every change is written to both folders. A cloud folder can be used as the backup.";
 "Formatting…" = "Formatting…";
 "Save response body…" = "Save response body…";
+"<empty>" = "<empty>";

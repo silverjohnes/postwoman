@@ -8,12 +8,14 @@ struct VarField: NSViewRepresentable {
     var placeholder = ""
     var mono = false
     var autofocus = false
+    var onBeginEditing: (() -> Void)? = nil        // the user clicked into the field or started typing (not a programmatic focus)
 
     final class Coord: NSObject, NSTextFieldDelegate {
         var parent: VarField
         var known: Set<String> = []
         var focused = false
         init(_ p: VarField) { parent = p }
+        func controlTextDidBeginEditing(_ n: Notification) { parent.onBeginEditing?() }
         func controlTextDidChange(_ n: Notification) {
             guard let f = n.object as? NSTextField else { return }
             if parent.text != f.stringValue { parent.text = f.stringValue }
@@ -51,6 +53,7 @@ struct VarField: NSViewRepresentable {
     func updateNSView(_ f: NSTextField, context: Context) {
         let c = context.coordinator
         c.parent = self
+        (f as? SurroundTextField)?.onClick = { [weak c] in c?.parent.onBeginEditing?() }
         if f.stringValue != text { f.stringValue = text; c.restyle(f) }
         else if c.known != Highlighter.known { c.restyle(f) }
         if autofocus && !c.focused {

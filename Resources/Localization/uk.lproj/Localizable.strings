@@ -264,3 +264,4 @@
 "Backup storage path. When switched on, every change is written to both folders. A cloud folder can be used as the backup." = "Резервний шлях для зберігання. Якщо налаштування увімкнено, кожна зміна записується в обидві папки. Як резервна може використовуватися хмарна папка.";
 "Formatting…" = "Форматування…";
 "Save response body…" = "Зберегти тіло відповіді…";
+"<empty>" = "<порожньо>";

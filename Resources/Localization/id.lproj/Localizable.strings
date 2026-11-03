@@ -264,3 +264,4 @@
 "Backup storage path. When switched on, every change is written to both folders. A cloud folder can be used as the backup." = "Jalur penyimpanan cadangan. Jika diaktifkan, setiap perubahan ditulis ke kedua folder. Folder cloud dapat digunakan sebagai cadangan.";
 "Formatting…" = "Memformat…";
 "Save response body…" = "Simpan isi respons…";
+"<empty>" = "<kosong>";

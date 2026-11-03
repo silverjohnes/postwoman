@@ -264,3 +264,4 @@
 "Backup storage path. When switched on, every change is written to both folders. A cloud folder can be used as the backup." = "Chemin de stockage de secours. Si l’option est activée, chaque modification est écrite dans les deux dossiers. Un dossier cloud peut servir de secours.";
 "Formatting…" = "Mise en forme…";
 "Save response body…" = "Enregistrer le corps de la réponse…";
+"<empty>" = "<vide>";

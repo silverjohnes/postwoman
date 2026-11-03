@@ -264,3 +264,4 @@
 "Backup storage path. When switched on, every change is written to both folders. A cloud folder can be used as the backup." = "مسار تخزين احتياطي. عند التفعيل يُكتب كل تغيير في المجلدين. يمكن استخدام مجلد سحابي كنسخة احتياطية.";
 "Formatting…" = "جارٍ التنسيق…";
 "Save response body…" = "حفظ نص الاستجابة…";
+"<empty>" = "<فارغ>";

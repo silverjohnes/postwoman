@@ -97,7 +97,11 @@ struct ResultDetail: View {
     private func saveBody() {
         let p = NSSavePanel()
         let looksJSON = r.resBody.drop { $0.isWhitespace }.first.map { $0 == "{" || $0 == "[" } ?? false
-        p.nameFieldStringValue = "response." + (looksJSON ? "json" : "txt")
+        let f = DateFormatter(); f.locale = Locale(identifier: "en_US_POSIX"); f.dateFormat = "yyyy.MM.dd HH.mm.ss"
+        // characters that Windows, macOS or Linux do not allow in a file name (and control characters) become "_"
+        let bad = CharacterSet(charactersIn: "<>:\"/\\|?*").union(.controlCharacters)
+        let clean = r.name.components(separatedBy: bad).joined(separator: "_").trimmingCharacters(in: .whitespaces)
+        p.nameFieldStringValue = L("Response") + (clean.isEmpty ? "" : " " + clean) + " " + f.string(from: r.started) + "." + (looksJSON ? "json" : "txt")
         guard p.runModal() == .OK, let u = p.url else { return }
         let body = r.resBody
         Task.detached {
@@ -109,7 +113,11 @@ struct ResultDetail: View {
     var body: some View {
         VStack(alignment: .leading) {
             Text("\(r.method) \(r.url)").font(.system(.body, design: .monospaced)).textSelection(.enabled).lineLimit(3).truncationMode(.middle)
-            Text(L("%@ %@ · %ld ms · %@", "\(r.code)", r.status, r.time, Self.stamp.string(from: r.started)) + (r.iteration > 0 ? L(" · iteration %ld", r.iteration) : "") + (r.resBody.isEmpty ? "" : " · " + sizeText)).foregroundStyle(.secondary)
+            HStack(alignment: .center, spacing: 6) {
+                StatusBadge(code: r.code, large: true)                                  // the same coloured code as in History
+                Text(L("%@ %@ · %ld ms · %@", "", r.status, r.time, Self.stamp.string(from: r.started)).trimmingCharacters(in: .whitespaces) + (r.iteration > 0 ? L(" · iteration %ld", r.iteration) : "") + (r.resBody.isEmpty ? "" : " · " + sizeText))
+                    .foregroundStyle(.secondary)
+            }
             if !r.dataRow.isEmpty {
                 Text(L("data: ") + r.dataRow.sorted { $0.key < $1.key }.map { "\($0.key)=\($0.value)" }.joined(separator: ", "))
                     .font(.caption).foregroundStyle(.secondary).lineLimit(2)

@@ -264,3 +264,4 @@
 "Backup storage path. When switched on, every change is written to both folders. A cloud folder can be used as the backup." = "مسیر ذخیره‌سازی پشتیبان. در صورت فعال بودن، هر تغییر در هر دو پوشه نوشته می‌شود. می‌توان از یک پوشه ابری به‌عنوان پشتیبان استفاده کرد.";
 "Formatting…" = "در حال قالب‌بندی…";
 "Save response body…" = "ذخیره بدنه پاسخ…";
+"<empty>" = "<خالی>";

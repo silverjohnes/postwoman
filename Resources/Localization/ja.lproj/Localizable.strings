@@ -264,3 +264,4 @@
 "Backup storage path. When switched on, every change is written to both folders. A cloud folder can be used as the backup." = "バックアップ用の保存パスです。オンにすると、すべての変更が両方のフォルダに書き込まれます。バックアップにはクラウドフォルダも使用できます。";
 "Formatting…" = "整形中…";
 "Save response body…" = "レスポンス本文を保存…";
+"<empty>" = "<空>";

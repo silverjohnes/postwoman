@@ -2,7 +2,7 @@
 
 **Much better than Postman (for simple jobs)**
 
-A free, native macOS app for working with Postman collections. Fast, lightweight, and everything stays on your Mac — nothing leaves it except the requests you send. Node.js and Newman are bundled, so there is nothing else to install.
+A free, native macOS app for working with Postman collections. Fast and lightweight. Collections can be stored locally or in a remote location (for example a synced or network folder), with an optional backup copy; sensitive data is encrypted. Node.js and Newman are bundled, so there is nothing else to install.
 
 **English** · [Русский](#postwoman-ru)
 
@@ -51,9 +51,11 @@ An ad-hoc signed app is blocked by Gatekeeper on other Macs: `xattr -dr com.appl
 
 # Postwoman (RU)
 
-****
+**Much better than Postman (for simple jobs)**
 
-Бесплатное нативное приложение для macOS для работы с коллекциями Postman. Быстрое, лёгкое, всё хранится на вашем Mac — наружу уходят только отправляемые вами запросы. Node.js и Newman встроены, ставить больше ничего не нужно.
+**Гораздо лучше, чем Постман (для простых задач)**
+
+Бесплатное нативное приложение для macOS для работы с коллекциями Postman. Быстрое и лёгкое. Коллекции можно хранить локально или удалённо (например, в синхронизируемой или сетевой папке), с необязательной резервной копией; чувствительные данные шифруются. Node.js и Newman встроены, ставить больше ничего не нужно.
 
 Версия **0.8.3.5** (сборка 0080305)
 

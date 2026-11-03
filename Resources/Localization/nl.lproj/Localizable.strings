@@ -264,3 +264,4 @@
 "Backup storage path. When switched on, every change is written to both folders. A cloud folder can be used as the backup." = "Back-upopslagpad. Indien ingeschakeld wordt elke wijziging naar beide mappen geschreven. Als back-up kan een cloudmap worden gebruikt.";
 "Formatting…" = "Opmaken…";
 "Save response body…" = "Antwoordtekst opslaan…";
+"<empty>" = "<leeg>";

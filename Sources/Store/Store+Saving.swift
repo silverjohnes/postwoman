@@ -20,15 +20,11 @@ extension Store {
     func saveAll() { writeCollections(all: true); refreshUnsaved() }
     /// ⌘S: the selected requests (a folder or collection → all requests inside); nothing selected → everything.
     func saveSelected() {
-        // a brand-new request still has the default name: ask for one first (cancel = nothing is saved)
-        if selected.count == 1, let n = primary, n.children == nil, n.needsName, n.name == "New Request" {
-            let a = NSAlert(); a.messageText = L("Rename"); a.addButton(withTitle: L("Save")); a.addButton(withTitle: L("Cancel"))
-            let f = NSTextField(frame: NSRect(x: 0, y: 0, width: 260, height: 24)); f.stringValue = n.name; a.accessoryView = f
-            a.window.initialFirstResponder = f
-            guard a.runModal() == .alertFirstButtonReturn else { return }
-            let name = f.stringValue.trimmingCharacters(in: .whitespaces)
-            if !name.isEmpty { log("tree", "Renamed \"\(n.name)\" → \"\(name)\""); n.name = name; recompute() }
-        }
+        // a brand-new request still has the default name: it is renamed in the list first, then saved (Esc = nothing is saved)
+        if selected.count == 1, let n = primary, n.children == nil, n.needsName, n.name == "New Request" { rename(thenSave: true); return }
+        performSave()
+    }
+    func performSave() {
         if let n = primary { n.needsName = false }
         let ids = Set(requests(in: Array(selected)).map(\.id))
         if ids.isEmpty { saveAll() } else { writeCollections(explicit: ids, globalsToo: false); refreshUnsaved() }

@@ -83,6 +83,8 @@ struct NodeRow: View {
     @ObservedObject var node: Node
     let depth: Int
     let flat: [Node]
+    @FocusState private var nameFocus: Bool
+    @State private var draft = ""
     var body: some View {
         let sel = store.selected.contains(node)
         let hit = store.matchIDs.contains(node.id)
@@ -95,7 +97,22 @@ struct NodeRow: View {
                 Color.clear.frame(width: 12)
                 Text(node.method).font(.system(size: 10, weight: .bold, design: .monospaced)).foregroundStyle(sel ? .white : color(node.method)).frame(width: 40, alignment: .leading)
             }
-            Text(highlighted(node.name, store.queryTrimmed)).lineLimit(1).foregroundStyle(sel ? .white : .primary)
+            if store.editingID == node.id {
+                // rename in place: Enter / click elsewhere = save, Esc = cancel
+                TextField("", text: $draft).textFieldStyle(.plain).focused($nameFocus)
+                    .padding(.horizontal, 4).padding(.vertical, 1)
+                    .background(RoundedRectangle(cornerRadius: 4).fill(Color(nsColor: .textBackgroundColor)))
+                    .foregroundStyle(Color.primary)
+                    .onSubmit { store.commitRename(node, draft) }
+                    .onExitCommand { store.cancelRename() }
+                    .onChange(of: nameFocus) { if !nameFocus && store.editingID == node.id { store.commitRename(node, draft) } }
+                    .onAppear {
+                        draft = node.name; nameFocus = true
+                        DispatchQueue.main.async { (NSApp.keyWindow?.firstResponder as? NSTextView)?.selectAll(nil) }
+                    }
+            } else {
+                Text(highlighted(node.name, store.queryTrimmed)).lineLimit(1).foregroundStyle(sel ? .white : .primary)
+            }
             if store.unsavedIDs.contains(node.id) { Circle().fill(sel ? Color.white : Color.orange).frame(width: 7, height: 7).help("Unsaved") }
             Spacer()
             if !node.folderHeaders.isEmpty { Image(systemName: "text.badge.plus").font(.caption2).foregroundStyle(sel ? .white : .secondary) }

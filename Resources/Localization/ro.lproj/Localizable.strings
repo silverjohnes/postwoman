@@ -264,3 +264,4 @@
 "Backup storage path. When switched on, every change is written to both folders. A cloud folder can be used as the backup." = "Calea de stocare de rezervă. Dacă este activată, fiecare modificare se scrie în ambele foldere. Ca rezervă se poate folosi un folder din cloud.";
 "Formatting…" = "Se formatează…";
 "Save response body…" = "Salvează corpul răspunsului…";
+"<empty>" = "<gol>";

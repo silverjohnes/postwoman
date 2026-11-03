@@ -157,19 +157,29 @@ struct HistoryTab: View {
     }
 }
 
+/// The coloured response code: green for 2xx / 3xx, red for errors (4xx, 5xx, ERR). Used by the History list and the Result pane.
+struct StatusBadge: View {
+    let code: Int
+    var selected = false
+    var large = false                              // Result pane: same size as the text next to it (History keeps the small one)
+    private var ok: Bool { code >= 200 && code < 400 }
+    var body: some View {
+        Text(code == 0 ? "ERR" : "\(code)")
+            .font(.system(large ? .body : .caption, design: .monospaced).bold())
+            .padding(.horizontal, 6).padding(.vertical, 1)
+            .background((ok ? Color.green : Color.red).opacity(selected ? 0.9 : 0.2), in: Capsule())
+            .foregroundStyle(selected ? Color.white : (ok ? Color.green : Color.red))
+    }
+}
+
 // MARK: One row of the list
 private struct HistoryRow: View {
     let entry: HistoryEntry
     let selected: Bool
-    private var ok: Bool { entry.code >= 200 && entry.code < 400 }
     var body: some View {
         VStack(alignment: .leading, spacing: 3) {
             HStack(spacing: 6) {
-                Text(entry.code == 0 ? "ERR" : "\(entry.code)")
-                    .font(.system(.caption, design: .monospaced).bold())
-                    .padding(.horizontal, 6).padding(.vertical, 1)
-                    .background((ok ? Color.green : Color.red).opacity(selected ? 0.9 : 0.2), in: Capsule())
-                    .foregroundStyle(selected ? Color.white : (ok ? Color.green : Color.red))
+                StatusBadge(code: entry.code, selected: selected)
                 Text("\(entry.timeMs) ms").font(.caption).foregroundStyle(selected ? Color.white.opacity(0.85) : Color.secondary)
                 Spacer(minLength: 0)
                 if !entry.dataRow.isEmpty { Image(systemName: "tablecells").font(.caption) }

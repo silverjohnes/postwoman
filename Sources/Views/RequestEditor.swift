@@ -93,7 +93,7 @@ struct RequestEditor: View {
             }
             HStack {
                 Picker("", selection: $node.method) { ForEach(["GET", "POST", "PUT", "PATCH", "DELETE", "HEAD", "OPTIONS"], id: \.self) { Text($0) } }.frame(width: 110).labelsHidden()
-                VarField(text: $node.url, placeholder: L("URL"), mono: true, autofocus: node.uiFocusURL).frame(maxWidth: .infinity).frame(height: 24)
+                VarField(text: $node.url, placeholder: L("URL"), mono: true, autofocus: node.uiFocusURL, onBeginEditing: { showResult = false }).frame(maxWidth: .infinity).frame(height: 24)
                 Button("Run") { store.run() }.buttonStyle(.borderedProminent)
             }
             HStack {

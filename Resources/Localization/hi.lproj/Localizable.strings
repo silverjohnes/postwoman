@@ -264,3 +264,4 @@
 "Backup storage path. When switched on, every change is written to both folders. A cloud folder can be used as the backup." = "बैकअप संग्रहण पथ। चालू होने पर हर बदलाव दोनों फ़ोल्डरों में लिखा जाता है। बैकअप के रूप में क्लाउड फ़ोल्डर इस्तेमाल किया जा सकता है।";
 "Formatting…" = "फ़ॉर्मेट हो रहा है…";
 "Save response body…" = "रिस्पॉन्स बॉडी सहेजें…";
+"<empty>" = "<खाली>";
