@@ -410,11 +410,11 @@ final class Node: ObservableObject, Identifiable, Hashable {
         return out
     }
 
-    /// qs: lowercased query variants (see layoutVariants). Searches every text field.
+    /// qs: lowercased query variants (see layoutVariants). `content: false` searches the name only, `content: true` only the content
+    /// (URL, headers, bodies, scripts), not the name.
     func matches(_ qs: [String], content: Bool = true) -> Bool {
         func hit(_ s: String) -> Bool { let l = s.lowercased(); return qs.contains { l.contains($0) } }
-        if hit(name) { return true }
-        if !content { return false }
+        if !content { return hit(name) }
         let hs = children == nil ? headers : folderHeaders
         if hs.contains(where: { hit($0.key) || hit($0.value) }) { return true }
         return children == nil && (hit(method) || hit(url) || hit(body) || formData.contains(where: { hit($0.key) || hit($0.value) }) || urlencoded.contains(where: { hit($0.key) || hit($0.value) }) || hit(preScript) || hit(testScript))

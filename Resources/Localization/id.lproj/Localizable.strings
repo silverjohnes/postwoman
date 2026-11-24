@@ -265,3 +265,10 @@
 "Formatting…" = "Memformat…";
 "Save response body…" = "Simpan isi respons…";
 "<empty>" = "<kosong>";
+"Search in URLs, headers, bodies, scripts" = "Cari di URL, header, isi, dan skrip";
+"Appearance" = "Tampilan";
+"Theme" = "Tema";
+"System" = "Sistem";
+"Light" = "Terang";
+"Dark" = "Gelap";
+"Code colors" = "Warna kode";

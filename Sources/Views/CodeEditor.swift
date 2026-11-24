@@ -17,6 +17,9 @@ struct CodeEditor: NSViewRepresentable {
         var ruler: FindRulerView?
         weak var tv: NSTextView?
         var pend: DispatchWorkItem?
+        @objc func themeChanged(_ n: Notification) {
+            MainActor.assumeIsolated { if let tv, let st = tv.textStorage, !tv.hasMarkedText() { Highlighter.apply(to: st, syntax: parent.syntax, size: 12) } }
+        }
         @objc func selChanged(_ n: Notification) {          // the same text as the selection is marked elsewhere (after a short pause)
             pend?.cancel()
             let w = DispatchWorkItem { [weak self] in MainActor.assumeIsolated { if let self, let tv = self.tv { self.remark(tv, scroll: false) } } }
@@ -80,6 +83,7 @@ struct CodeEditor: NSViewRepresentable {
         let box = FindContainer(scroll: sv)
         context.coordinator.ruler = box.ruler; context.coordinator.tv = tv
         NotificationCenter.default.addObserver(context.coordinator, selector: #selector(Coord.selChanged(_:)), name: NSTextView.didChangeSelectionNotification, object: tv)
+        NotificationCenter.default.addObserver(context.coordinator, selector: #selector(Coord.themeChanged(_:)), name: .codeThemeChanged, object: nil)
         return box
     }
     func updateNSView(_ nv: NSView, context: Context) {
@@ -106,6 +110,12 @@ struct CodeEditor: NSViewRepresentable {
 /// (it must not leave full-screen mode). Works on any keyboard layout: the physical "/" key is matched by key code.
 final class CommentTextView: NSTextView {
     var commentable = false
+    /// Triple click inside a quoted string selects the text of that string (not the whole line). Double click (a word) is unchanged.
+    override func mouseDown(with event: NSEvent) {
+        if openLink(at: event) { return }
+        if event.clickCount == 3, let r = quotedRange(at: event) { setSelectedRange(r); return }
+        super.mouseDown(with: event)
+    }
     override func insertText(_ string: Any, replacementRange: NSRange) {
         if !surroundSelection(of: self, with: string) { super.insertText(string, replacementRange: replacementRange) }
     }
@@ -205,4 +215,55 @@ final class SurroundTextField: NSTextField {
     override class var cellClass: AnyClass? { get { SurroundCell.self } set {} }
     var onClick: (() -> Void)?                     // a mouse click into the field (not a programmatic focus)
     override func mouseDown(with event: NSEvent) { onClick?(); super.mouseDown(with: event) }
+}
+
+extension NSTextView {
+    /// ⌘-click on an http(s) link opens it in the default browser. Returns true when a link was opened (the click is then consumed).
+    func openLink(at event: NSEvent) -> Bool {
+        guard event.modifierFlags.contains(.command), event.clickCount == 1 else { return false }
+        let ns = string as NSString
+        guard ns.length > 0 else { return false }
+        let idx = min(characterIndexForInsertion(at: convert(event.locationInWindow, from: nil)), ns.length - 1)
+        let line = ns.lineRange(for: NSRange(location: idx, length: 0))
+        guard let re = try? NSRegularExpression(pattern: "https?://[^\\s\"'<>`{}|\\\\^]+") else { return false }
+        for m in re.matches(in: string, range: line) where idx >= m.range.location && idx <= NSMaxRange(m.range) {
+            var r = m.range
+            // trailing punctuation is not part of the link
+            while r.length > 0, ".,;:!?)]".contains(Character(UnicodeScalar(ns.character(at: NSMaxRange(r) - 1)) ?? " ")) { r.length -= 1 }
+            if NSMaxRange(r) < ns.length, ns.character(at: NSMaxRange(r)) == 0x7B { return false }          // {{variable}} follows: not a real link yet
+            let text = ns.substring(with: r)
+            let encoded = text.addingPercentEncoding(withAllowedCharacters: CharacterSet(charactersIn: "%#:/?&=@+;,$!*()[]~-._").union(.alphanumerics))
+            if let u = URL(string: encoded ?? text) { NSWorkspace.shared.open(u); return true }
+        }
+        return false
+    }
+    /// Range of the text (without the quotes) of the "…" or '…' string under the mouse, on its own line; nil when the click is not inside one.
+    func quotedRange(at event: NSEvent) -> NSRange? {
+        let ns = string as NSString
+        guard ns.length > 0 else { return nil }
+        let idx = min(characterIndexForInsertion(at: convert(event.locationInWindow, from: nil)), ns.length - 1)
+        let line = ns.lineRange(for: NSRange(location: idx, length: 0))
+        let end = NSMaxRange(line)
+        var i = line.location
+        while i < end {
+            let c = ns.character(at: i)
+            if c == 0x22 || c == 0x27 {                                   // only " and '; an escaped quote (\" \') is an ordinary character
+                var j = i + 1
+                while j < end, ns.character(at: j) != c, ns.character(at: j) != 10 { j += ns.character(at: j) == 0x5C ? 2 : 1 }   // \ escapes the next character
+                guard j < end, ns.character(at: j) == c else { return nil }   // unclosed on this line
+                if idx >= i && idx <= j { return NSRange(location: i + 1, length: j - i - 1) }
+                i = j + 1
+            } else { i += 1 }
+        }
+        return nil
+    }
+}
+
+/// Read-only text of the result panes: a triple click selects the quoted string under the mouse, like in the editors.
+final class ResultTextView: NSTextView {
+    override func mouseDown(with event: NSEvent) {
+        if openLink(at: event) { return }
+        if event.clickCount == 3, let r = quotedRange(at: event) { setSelectedRange(r); return }
+        super.mouseDown(with: event)
+    }
 }

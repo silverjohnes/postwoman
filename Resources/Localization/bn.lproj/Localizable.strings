@@ -265,3 +265,10 @@
 "Formatting…" = "ফরম্যাট হচ্ছে…";
 "Save response body…" = "রেসপন্স বডি সংরক্ষণ করুন…";
 "<empty>" = "<খালি>";
+"Search in URLs, headers, bodies, scripts" = "URL, হেডার, বডি ও স্ক্রিপ্টে খুঁজুন";
+"Appearance" = "চেহারা";
+"Theme" = "থিম";
+"System" = "সিস্টেম";
+"Light" = "হালকা";
+"Dark" = "গাঢ়";
+"Code colors" = "কোডের রং";

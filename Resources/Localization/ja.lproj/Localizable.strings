@@ -265,3 +265,10 @@
 "Formatting…" = "整形中…";
 "Save response body…" = "レスポンス本文を保存…";
 "<empty>" = "<空>";
+"Search in URLs, headers, bodies, scripts" = "URL・ヘッダー・本文・スクリプト内を検索";
+"Appearance" = "外観";
+"Theme" = "テーマ";
+"System" = "システム";
+"Light" = "ライト";
+"Dark" = "ダーク";
+"Code colors" = "コードの配色";

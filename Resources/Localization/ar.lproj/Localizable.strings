@@ -265,3 +265,10 @@
 "Formatting…" = "جارٍ التنسيق…";
 "Save response body…" = "حفظ نص الاستجابة…";
 "<empty>" = "<فارغ>";
+"Search in URLs, headers, bodies, scripts" = "بحث في الروابط والترويسات والأجسام والسكربتات";
+"Appearance" = "المظهر";
+"Theme" = "السمة";
+"System" = "النظام";
+"Light" = "فاتح";
+"Dark" = "داكن";
+"Code colors" = "ألوان الكود";

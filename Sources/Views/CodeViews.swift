@@ -147,11 +147,12 @@ struct CodeText: NSViewRepresentable {
     var find = ""                                 // case-insensitive; all hits are marked, the current one is scrolled to
     var findIndex = 0
     var onCount: ((Int) -> Void)? = nil
+    var theme = ""                                // the code theme id: a change re-colours the text
     static let cap = 40_000_000                   // bytes shown at most (the runner hands over up to 32 M characters)
     static let colourCap = 8_000_000              // longer texts are shown without syntax colours
 
     final class Coord: NSObject, @unchecked Sendable {
-        var last: String?; var lastSyntax: Syntax?; var lastFind = ""; var lastIdx = -1
+        var last: String?; var lastSyntax: Syntax?; var lastTheme = ""; var lastFind = ""; var lastIdx = -1
         let marks = MarkState()
         var ruler: FindRulerView?
         weak var tv: NSTextView?
@@ -173,6 +174,11 @@ struct CodeText: NSViewRepresentable {
         weak var scroll: NSScrollView?
 
         @objc func scrolled() { applyVisible() }
+        /// Links are underlined (temporary attribute: no text edits).
+        func underline(_ links: [NSRange]) {
+            guard let lm = tv?.layoutManager, let len = tv?.string.utf16.count else { return }
+            for r in links where NSMaxRange(r) <= len { lm.addTemporaryAttribute(.underlineStyle, value: NSUnderlineStyle.single.rawValue, forCharacterRange: r) }
+        }
 
         /// Colours the chunks around the visible part (one chunk of margin on both sides).
         func applyVisible() {
@@ -209,7 +215,7 @@ struct CodeText: NSViewRepresentable {
         let tc = NSTextContainer(size: NSSize(width: 0, height: CGFloat.greatestFiniteMagnitude))
         tc.widthTracksTextView = true
         lm.addTextContainer(tc)
-        let tv = NSTextView(frame: NSRect(x: 0, y: 0, width: 400, height: 300), textContainer: tc)
+        let tv = ResultTextView(frame: NSRect(x: 0, y: 0, width: 400, height: 300), textContainer: tc)
         tv.minSize = NSSize(width: 0, height: 0)                          // without these the view never grows with its text: no scroller, wheel scrolls back
         tv.maxSize = NSSize(width: CGFloat.greatestFiniteMagnitude, height: CGFloat.greatestFiniteMagnitude)
         tc.containerSize = NSSize(width: 400, height: CGFloat.greatestFiniteMagnitude)
@@ -245,12 +251,13 @@ struct CodeText: NSViewRepresentable {
     func updateNSView(_ nv: NSView, context: Context) {
         guard let sv = (nv as? FindContainer)?.scroll, let tv = sv.documentView as? NSTextView, let lm = tv.layoutManager, let storage = tv.textStorage else { return }
         let c = context.coordinator
-        let changed = c.last != text || c.lastSyntax != syntax
+        let changed = c.last != text || c.lastSyntax != syntax || c.lastTheme != theme
         if changed {
-            c.last = text; c.lastSyntax = syntax
+            c.last = text; c.lastSyntax = syntax; c.lastTheme = theme
             c.gen += 1; c.spans = []; c.applied = []; c.marks.find = []; c.marks.occ = []
             lm.removeTemporaryAttribute(.foregroundColor, forCharacterRange: NSRange(location: 0, length: (tv.string as NSString).length))
             lm.removeTemporaryAttribute(.backgroundColor, forCharacterRange: NSRange(location: 0, length: (tv.string as NSString).length))
+            lm.removeTemporaryAttribute(.underlineStyle, forCharacterRange: NSRange(location: 0, length: (tv.string as NSString).length))
             var shown = text
             if shown.utf8.count > Self.cap {
                 shown = String(shown.prefix(Self.cap)) + L("\n\n… truncated: showing %ld of %ld characters", Self.cap, text.utf16.count)
@@ -267,13 +274,14 @@ struct CodeText: NSViewRepresentable {
                     lm.addTemporaryAttributes([.foregroundColor: fg, .backgroundColor: fg.withAlphaComponent(ok ? 0.16 : 0.12)], forCharacterRange: m.range)
                 }
             }
-            if syntax != .plain, storage.length <= Self.colourCap {
+            if storage.length <= Self.colourCap {
                 let g = c.gen, t = shown, s = syntax
                 Task.detached(priority: .userInitiated) {
-                    let sp = Highlighter.spans(t, s).enumerated().sorted {
+                    let sp = s == .plain ? [] : Highlighter.spans(t, s).enumerated().sorted {
                         $0.element.0.location != $1.element.0.location ? $0.element.0.location < $1.element.0.location : $0.offset < $1.offset
                     }.map { $0.element }
-                    await MainActor.run { guard c.gen == g else { return }; c.spans = sp; c.applyVisible() }
+                    let links = Highlighter.linkRanges(t)
+                    await MainActor.run { guard c.gen == g else { return }; c.spans = sp; c.applyVisible(); c.underline(links) }
                 }
             }
         }
@@ -313,6 +321,7 @@ struct FoundText: View {
     @EnvironmentObject var store: Store
     let text: String
     var syntax: Syntax = .http
+    @AppStorage("codeTheme") private var codeTheme = "default"
     @State private var q = ""
     @State private var idx = 0
     @State private var count = 0
@@ -323,7 +332,7 @@ struct FoundText: View {
             FindBar(q: $q, idx: $idx, count: count, focus: $fieldFocus)
             CodeText(text: text, syntax: syntax, size: 12, find: q, findIndex: idx, onCount: { n in
                 count = n; if idx >= n { idx = 0 }
-            })
+            }, theme: codeTheme)
         }
         .onChange(of: q) { idx = 0 }
         .onChange(of: store.focusFind) {

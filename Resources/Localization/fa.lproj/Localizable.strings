@@ -265,3 +265,10 @@
 "Formatting…" = "در حال قالب‌بندی…";
 "Save response body…" = "ذخیره بدنه پاسخ…";
 "<empty>" = "<خالی>";
+"Search in URLs, headers, bodies, scripts" = "جستجو در URL، سرآیندها، بدنه‌ها و اسکریپت‌ها";
+"Appearance" = "ظاهر";
+"Theme" = "پوسته";
+"System" = "سیستم";
+"Light" = "روشن";
+"Dark" = "تیره";
+"Code colors" = "رنگ‌های کد";

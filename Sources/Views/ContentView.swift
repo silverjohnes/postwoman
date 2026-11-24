@@ -37,6 +37,7 @@ struct ContentView: View {
                 }
             }
         }
+        .onAppear { AppAppearance.applySaved() }
         .alert("Error", isPresented: Binding(get: { store.error != nil }, set: { _ in store.error = nil })) { Button("OK") {} } message: { Text(store.error ?? "") }
     }
 }

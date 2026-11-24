@@ -322,6 +322,7 @@ final class Runner: ObservableObject {
                 results[i].visual = redactor.mask(j["html"]?.text ?? "")
                 results[i].visualData = redactor.mask(j["data"]?.text ?? "null")
                 results[i].visualError = j["error"]?.text ?? ""
+                FreshVisual.mark(results[i].id)
             }
         case "vars":                      // variables written by scripts: later iterations see them, the Store persists them in Globals
             var ch: [VarChange] = []
@@ -472,4 +473,12 @@ extension Runner {
             note("Errors CSV saved: \(rows.count) unique row(s) → \(u.lastPathComponent)", .info, "runner")
         } catch { note("Errors CSV not saved: \(error.localizedDescription)", .error, "runner") }
     }
+}
+
+/// A visualization (and so its script, which may e.g. copy something to the clipboard) opens by itself only right after the request was run.
+/// Opening an old result later shows the Response tab; the Visualize tab runs only when you click it.
+enum FreshVisual {
+    private static var arrived: [UUID: Date] = [:]
+    static func mark(_ id: UUID) { arrived[id] = Date(); if arrived.count > 200 { arrived = arrived.filter { Date().timeIntervalSince($0.value) < 30 } } }
+    static func isFresh(_ id: UUID) -> Bool { arrived[id].map { Date().timeIntervalSince($0) < 8 } ?? false }
 }

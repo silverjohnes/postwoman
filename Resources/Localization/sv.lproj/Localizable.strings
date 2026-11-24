@@ -265,3 +265,10 @@
 "Formatting…" = "Formaterar…";
 "Save response body…" = "Spara svarstext…";
 "<empty>" = "<tomt>";
+"Search in URLs, headers, bodies, scripts" = "Sök i URL:er, rubriker, innehåll och skript";
+"Appearance" = "Utseende";
+"Theme" = "Tema";
+"System" = "System";
+"Light" = "Ljust";
+"Dark" = "Mörkt";
+"Code colors" = "Kodfärger";

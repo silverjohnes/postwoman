@@ -14,6 +14,8 @@ struct SettingsView: View {
     @State private var checkRows: [(label: String, path: String, problem: String?)] = []
     @AppStorage("appLanguage") private var appLanguage = "auto"
     @AppStorage("autosave") private var autosave = true
+    @AppStorage("appearance") private var appearance = "system"
+    @AppStorage("codeTheme") private var codeTheme = "default"
     @Environment(\.openWindow) private var openWindow
     @AppStorage("requestTimeout") private var timeout = 10
     @AppStorage("historyRetentionValue") private var keepValue = 6
@@ -35,6 +37,17 @@ struct SettingsView: View {
                     }
                 }
                 note("The language changes after the app is restarted.")
+            }
+
+            Section("Appearance") {
+                Picker("Theme", selection: Binding(get: { appearance }, set: { appearance = $0; AppAppearance.apply($0) })) {
+                    Text("System").tag("system"); Text("Light").tag("light"); Text("Dark").tag("dark")
+                }
+                Picker("Code colors", selection: Binding(get: { codeTheme }, set: {
+                    Highlighter.setTheme($0); codeTheme = $0; NotificationCenter.default.post(name: .codeThemeChanged, object: nil)
+                })) {
+                    ForEach(CodePalette.all) { Text($0.id == "default" ? L("Default") : $0.title).tag($0.id) }
+                }
             }
 
             Section("Saving") {
@@ -140,6 +153,7 @@ struct SettingsView: View {
 
             Section("About") {
                 LabeledContent("Version") { Text(AppLanguage.versionText).textSelection(.enabled) }
+                LabeledContent("GitHub") { Link("github.com/silverjohnes/postwoman", destination: URL(string: "https://github.com/silverjohnes/postwoman")!) }
             }
         }
         .formStyle(.grouped)

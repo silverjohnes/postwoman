@@ -265,3 +265,10 @@
 "Formatting…" = "正在格式化…";
 "Save response body…" = "儲存回應本文…";
 "<empty>" = "<空>";
+"Search in URLs, headers, bodies, scripts" = "在 URL、標頭、本文和指令碼中搜尋";
+"Appearance" = "外觀";
+"Theme" = "主題";
+"System" = "跟隨系統";
+"Light" = "淺色";
+"Dark" = "深色";
+"Code colors" = "程式碼配色";

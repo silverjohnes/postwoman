@@ -265,3 +265,10 @@
 "Formatting…" = "Opmaken…";
 "Save response body…" = "Antwoordtekst opslaan…";
 "<empty>" = "<leeg>";
+"Search in URLs, headers, bodies, scripts" = "Zoeken in URL’s, headers, bodies en scripts";
+"Appearance" = "Weergave";
+"Theme" = "Thema";
+"System" = "Systeem";
+"Light" = "Licht";
+"Dark" = "Donker";
+"Code colors" = "Codekleuren";

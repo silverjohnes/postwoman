@@ -265,3 +265,10 @@
 "Formatting…" = "서식 지정 중…";
 "Save response body…" = "응답 본문 저장…";
 "<empty>" = "<비어 있음>";
+"Search in URLs, headers, bodies, scripts" = "URL, 헤더, 본문, 스크립트에서 검색";
+"Appearance" = "모양";
+"Theme" = "테마";
+"System" = "시스템";
+"Light" = "라이트";
+"Dark" = "다크";
+"Code colors" = "코드 색상";

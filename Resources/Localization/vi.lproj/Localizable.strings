@@ -265,3 +265,10 @@
 "Formatting…" = "Đang định dạng…";
 "Save response body…" = "Lưu nội dung phản hồi…";
 "<empty>" = "<trống>";
+"Search in URLs, headers, bodies, scripts" = "Tìm trong URL, tiêu đề, nội dung và script";
+"Appearance" = "Giao diện";
+"Theme" = "Chủ đề";
+"System" = "Hệ thống";
+"Light" = "Sáng";
+"Dark" = "Tối";
+"Code colors" = "Màu mã";

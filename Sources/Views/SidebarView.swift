@@ -13,7 +13,7 @@ struct SidebarView: View {
         VStack(spacing: 0) {
             HStack(spacing: 6) {
                 Image(systemName: "magnifyingglass").foregroundStyle(.secondary)
-                TextField(store.searchContent ? LocalizedStringKey("Search names, URLs, headers, bodies") : LocalizedStringKey("Search by name"), text: $store.query).textFieldStyle(.plain).focused($focused)
+                TextField(store.searchContent ? LocalizedStringKey("Search in URLs, headers, bodies, scripts") : LocalizedStringKey("Search by name"), text: $store.query).textFieldStyle(.plain).focused($focused)
                     .onSubmit { store.jump(1); focused = true }          // Enter → next match
                 if !store.query.isEmpty {
                     Text(store.counter).font(.caption.monospacedDigit()).foregroundStyle(store.matches.isEmpty ? Color.red : Color.secondary)
@@ -39,8 +39,9 @@ struct SidebarView: View {
                 .focusable()
                 .focused($listFocused)
                 .focusEffectDisabled()
-                .simultaneousGesture(TapGesture().onEnded { listFocused = true })
+                .simultaneousGesture(TapGesture().onEnded { if store.editingID == nil { listFocused = true } })       // not while a row is being renamed: it would take the focus from the field
                 .onMoveCommand { dir in
+                    if store.editingID != nil { return }
                     let extend = NSEvent.modifierFlags.contains(.shift)
                     switch dir {
                     case .up: store.moveSelection(-1, extend: extend, rows: flat)
@@ -50,11 +51,12 @@ struct SidebarView: View {
                     @unknown default: break
                     }
                 }
-                .onDeleteCommand { store.deleteSelected() }
+                .onDeleteCommand { if store.editingID == nil { store.deleteSelected() } }
                 .onCopyCommand { store.copySelected(cut: false); return [NSItemProvider(object: (store.primary?.name ?? "") as NSString)] }
                 .onCutCommand { store.copySelected(cut: true); return [NSItemProvider(object: (store.primary?.name ?? "") as NSString)] }
                 .onPasteCommand(of: [.text]) { _ in store.paste() }
                 .onKeyPress(phases: [.down]) { press in
+                    if store.editingID != nil { return .ignored }          // a row is being renamed: Enter / ⌘A belong to its text field
                     if press.key == .return { if let n = store.primary { if n.children != nil { store.toggle(n) } else { store.tab = .request } }; return .handled }
                     if press.characters.lowercased() == "a", press.modifiers.contains(.command) { store.selected = Set(flat); return .handled }
                     return .ignored
@@ -108,10 +110,12 @@ struct NodeRow: View {
                     .onChange(of: nameFocus) { if !nameFocus && store.editingID == node.id { store.commitRename(node, draft) } }
                     .onAppear {
                         draft = node.name; nameFocus = true
-                        DispatchQueue.main.async { (NSApp.keyWindow?.firstResponder as? NSTextView)?.selectAll(nil) }
+                        DispatchQueue.main.async {      // the cursor goes to the end of the name; the usual text editing works
+                            if let tv = NSApp.keyWindow?.firstResponder as? NSTextView { tv.setSelectedRange(NSRange(location: (tv.string as NSString).length, length: 0)) }
+                        }
                     }
             } else {
-                Text(highlighted(node.name, store.queryTrimmed)).lineLimit(1).foregroundStyle(sel ? .white : .primary)
+                Text(highlighted(node.name, store.searchContent ? "" : store.queryTrimmed)).lineLimit(1).foregroundStyle(sel ? .white : .primary)
             }
             if store.unsavedIDs.contains(node.id) { Circle().fill(sel ? Color.white : Color.orange).frame(width: 7, height: 7).help("Unsaved") }
             Spacer()
@@ -120,11 +124,11 @@ struct NodeRow: View {
         .padding(.vertical, 4).padding(.horizontal, 8)
         .background(sel ? Color.accentColor : (hit ? Color.yellow.opacity(0.22) : Color.clear))
         .contentShape(Rectangle())
-        .onTapGesture { store.click(node, rows: flat) }
+        .onTapGesture { if store.editingID != node.id { store.click(node, rows: flat) } }
         .overlay(alignment: .top) { if store.dropHint == DropHint(id: node.id, pos: .before) { Rectangle().fill(Color.accentColor).frame(height: 2) } }
         .overlay(alignment: .bottom) { if store.dropHint == DropHint(id: node.id, pos: .after) { Rectangle().fill(Color.accentColor).frame(height: 2) } }
         .overlay { if store.dropHint == DropHint(id: node.id, pos: .inside) { RoundedRectangle(cornerRadius: 4).stroke(Color.accentColor, lineWidth: 2) } }
-        .onDrag { store.beginDrag(node); return NSItemProvider(object: node.id.uuidString as NSString) }
+        .modifier(RowDrag(enabled: store.editingID != node.id) { store.beginDrag(node); return NSItemProvider(object: node.id.uuidString as NSString) })
         .onDrop(of: [.text], delegate: NodeDropDelegate(node: node, store: store))
         .contextMenu {
             Button("Run") { store.select(node); store.run() }
@@ -193,5 +197,14 @@ struct CurlImportSheet: View {
         .onAppear {
             if let s = NSPasteboard.general.string(forType: .string), s.trimmingCharacters(in: .whitespacesAndNewlines).lowercased().hasPrefix("curl") { text = s }
         }
+    }
+}
+
+/// Drag of a list row; switched off while the row is renamed, so the mouse can select text in the name field.
+struct RowDrag: ViewModifier {
+    let enabled: Bool
+    let provider: () -> NSItemProvider
+    @ViewBuilder func body(content: Content) -> some View {
+        if enabled { content.onDrag(provider) } else { content }
     }
 }

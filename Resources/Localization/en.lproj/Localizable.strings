@@ -265,3 +265,10 @@
 "Formatting…" = "Formatting…";
 "Save response body…" = "Save response body…";
 "<empty>" = "<empty>";
+"Search in URLs, headers, bodies, scripts" = "Search in URLs, headers, bodies, scripts";
+"Appearance" = "Appearance";
+"Theme" = "Theme";
+"System" = "System";
+"Light" = "Light";
+"Dark" = "Dark";
+"Code colors" = "Code colors";

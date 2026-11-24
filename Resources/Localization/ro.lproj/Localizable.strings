@@ -265,3 +265,10 @@
 "Formatting…" = "Se formatează…";
 "Save response body…" = "Salvează corpul răspunsului…";
 "<empty>" = "<gol>";
+"Search in URLs, headers, bodies, scripts" = "Caută în URL-uri, antete, corpuri și scripturi";
+"Appearance" = "Aspect";
+"Theme" = "Temă";
+"System" = "Sistem";
+"Light" = "Luminos";
+"Dark" = "Întunecat";
+"Code colors" = "Culorile codului";

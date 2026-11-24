@@ -8,7 +8,7 @@ A Windows version is available at [github.com/silverjohnes/postwoman-win](https:
 
 **English** · [Русский](#postwoman-ru)
 
-Version **0.8.3.5** (build 0080305)
+Version **0.8.5.1** (build 0080511)
 
 ## Features
 
@@ -61,7 +61,7 @@ An ad-hoc signed app is blocked by Gatekeeper on other Macs: `xattr -dr com.appl
 
 Версия для Windows доступна по адресу [github.com/silverjohnes/postwoman-win](https://github.com/silverjohnes/postwoman-win).
 
-Версия **0.8.3.5** (сборка 0080305)
+Версия **0.8.5.1** (сборка 0080511)
 
 ## Возможности
 

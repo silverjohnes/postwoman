@@ -231,7 +231,7 @@ final class Store: ObservableObject {
         var v = Set<UUID>()
         // Shown: matches, their ancestors, and the whole contents of a folder whose NAME matches.
         func mark(_ n: Node, _ anc: Bool) -> Bool {
-            let m = n.matches(qs, content: searchContent); let nameHit = qs.contains { n.name.lowercased().contains($0) }; var any = false
+            let m = n.matches(qs, content: searchContent); let nameHit = !searchContent && qs.contains { n.name.lowercased().contains($0) }; var any = false
             if m { matches.append(n); matchIDs.insert(n.id) }
             for c in n.children ?? [] { if mark(c, anc || nameHit) { any = true } }
             if anc || m || any { v.insert(n.id); return true }

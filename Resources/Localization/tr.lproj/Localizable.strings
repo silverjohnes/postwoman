@@ -265,3 +265,10 @@
 "Formatting…" = "Biçimlendiriliyor…";
 "Save response body…" = "Yanıt gövdesini kaydet…";
 "<empty>" = "<boş>";
+"Search in URLs, headers, bodies, scripts" = "URL, başlık, gövde ve betiklerde ara";
+"Appearance" = "Görünüm";
+"Theme" = "Tema";
+"System" = "Sistem";
+"Light" = "Açık";
+"Dark" = "Koyu";
+"Code colors" = "Kod renkleri";

@@ -265,3 +265,10 @@
 "Formatting…" = "正在格式化…";
 "Save response body…" = "保存响应正文…";
 "<empty>" = "<空>";
+"Search in URLs, headers, bodies, scripts" = "在 URL、标头、正文和脚本中搜索";
+"Appearance" = "外观";
+"Theme" = "主题";
+"System" = "跟随系统";
+"Light" = "浅色";
+"Dark" = "深色";
+"Code colors" = "代码配色";

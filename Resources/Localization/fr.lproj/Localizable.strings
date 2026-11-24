@@ -265,3 +265,10 @@
 "Formatting…" = "Mise en forme…";
 "Save response body…" = "Enregistrer le corps de la réponse…";
 "<empty>" = "<vide>";
+"Search in URLs, headers, bodies, scripts" = "Rechercher dans les URL, en-têtes, corps et scripts";
+"Appearance" = "Apparence";
+"Theme" = "Thème";
+"System" = "Système";
+"Light" = "Clair";
+"Dark" = "Sombre";
+"Code colors" = "Couleurs du code";

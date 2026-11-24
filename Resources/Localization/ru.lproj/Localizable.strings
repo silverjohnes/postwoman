@@ -265,3 +265,10 @@
 "Formatting…" = "Форматирование…";
 "Save response body…" = "Сохранить тело ответа…";
 "<empty>" = "<пусто>";
+"Search in URLs, headers, bodies, scripts" = "Поиск по URL, заголовкам, телам и скриптам";
+"Appearance" = "Оформление";
+"Theme" = "Тема";
+"System" = "Системная";
+"Light" = "Светлая";
+"Dark" = "Тёмная";
+"Code colors" = "Цвета кода";

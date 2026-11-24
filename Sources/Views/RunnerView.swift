@@ -74,7 +74,7 @@ struct ResultDetail: View {
     @State private var resText: String
     @State private var formatting = false
     init(r: ExecResult) {
-        self.r = r; _t = State(initialValue: r.visual != nil ? 2 : 1)   // Visualize when the scripts made one, else Response
+        self.r = r; _t = State(initialValue: r.visual != nil && FreshVisual.isFresh(r.id) ? 2 : 1)   // Visualize when the scripts made one, else Response
         // small bodies are formatted at once; big ones show raw first and are formatted off the main thread (see .task below)
         let rb = HTTPText.pretty(r.reqBody), sb = HTTPText.pretty(r.resBody)
         let rh = UserDefaults.standard.object(forKey: "showReqHeaders") as? Bool ?? true, sh = UserDefaults.standard.object(forKey: "showResHeaders") as? Bool ?? true
@@ -145,8 +145,8 @@ struct ResultDetail: View {
             }
         }
         .frame(minWidth: 260)
-        .onChange(of: r.visual != nil) { _, has in t = has ? 2 : (t == 2 ? 1 : t) }
-        .onChange(of: r.id) { t = r.visual != nil ? 2 : 1 }
+        .onChange(of: r.visual != nil) { _, has in t = has ? (FreshVisual.isFresh(r.id) ? 2 : t) : (t == 2 ? 1 : t) }
+        .onChange(of: r.id) { t = r.visual != nil && FreshVisual.isFresh(r.id) ? 2 : 1 }
         .onChange(of: reqHeadersOn) { rebuild() }
         .onChange(of: resHeadersOn) { rebuild() }
         .task(id: r.id) {

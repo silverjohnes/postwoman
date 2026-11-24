@@ -265,3 +265,10 @@
 "Formatting…" = "फ़ॉर्मेट हो रहा है…";
 "Save response body…" = "रिस्पॉन्स बॉडी सहेजें…";
 "<empty>" = "<खाली>";
+"Search in URLs, headers, bodies, scripts" = "URL, हेडर, बॉडी और स्क्रिप्ट में खोजें";
+"Appearance" = "दिखावट";
+"Theme" = "थीम";
+"System" = "सिस्टम";
+"Light" = "हल्का";
+"Dark" = "गहरा";
+"Code colors" = "कोड के रंग";

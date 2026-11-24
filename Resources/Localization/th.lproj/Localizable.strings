@@ -265,3 +265,10 @@
 "Formatting…" = "กำลังจัดรูปแบบ…";
 "Save response body…" = "บันทึกเนื้อหาการตอบกลับ…";
 "<empty>" = "<ว่าง>";
+"Search in URLs, headers, bodies, scripts" = "ค้นหาใน URL ส่วนหัว เนื้อหา และสคริปต์";
+"Appearance" = "การแสดงผล";
+"Theme" = "ธีม";
+"System" = "ระบบ";
+"Light" = "สว่าง";
+"Dark" = "มืด";
+"Code colors" = "สีของโค้ด";
