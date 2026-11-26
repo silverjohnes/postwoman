@@ -75,7 +75,7 @@
 "Find" = "查找";
 "Find in text" = "在文本中查找";
 "Folder" = "文件夹";
-"Globals" = "全局变量";
+"Globals" = "变量";
 "Headers" = "请求头";
 "Headers (inherited)" = "请求头（继承）";
 "Hide value" = "隐藏值";

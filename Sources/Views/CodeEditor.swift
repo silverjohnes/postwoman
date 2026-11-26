@@ -200,14 +200,30 @@ struct ScriptPane: View {
 
 /// Field editor of the single-line fields: same surround behaviour as the code editor.
 final class SurroundFieldEditor: NSTextView {
+    var pathSelect = false                         // URL field: 3 clicks = the part between "/" and "/", 4 clicks = the whole address
+    override func mouseDown(with event: NSEvent) {
+        if pathSelect {
+            if event.clickCount == 4 { selectAll(nil); return }
+            if event.clickCount == 3 {
+                let ns = string as NSString
+                let idx = min(characterIndexForInsertion(at: convert(event.locationInWindow, from: nil)), ns.length)
+                var a = idx; while a > 0, ns.character(at: a - 1) != 0x2F { a -= 1 }
+                var b = idx; while b < ns.length, ns.character(at: b) != 0x2F { b += 1 }
+                if b > a { setSelectedRange(NSRange(location: a, length: b - a)); return }
+            }
+        }
+        super.mouseDown(with: event)
+    }
     override func insertText(_ string: Any, replacementRange: NSRange) {
         if !surroundSelection(of: self, with: string) { super.insertText(string, replacementRange: replacementRange) }
     }
 }
 final class SurroundCell: NSTextFieldCell {
     private var editor: SurroundFieldEditor?
+    var pathSelect = false
     override func fieldEditor(for controlView: NSView) -> NSTextView? {
         if editor == nil { let e = SurroundFieldEditor(); e.isFieldEditor = true; editor = e }
+        editor?.pathSelect = pathSelect
         return editor
     }
 }

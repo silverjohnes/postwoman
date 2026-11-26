@@ -75,7 +75,7 @@
 "Find" = "検索";
 "Find in text" = "テキスト内を検索";
 "Folder" = "フォルダ";
-"Globals" = "グローバル";
+"Globals" = "変数";
 "Headers" = "ヘッダ";
 "Headers (inherited)" = "ヘッダ（継承）";
 "Hide value" = "値を隠す";

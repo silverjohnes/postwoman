@@ -11,8 +11,8 @@ settings:
     SWIFT_VERSION: "5.0"                      # the code is written for Swift 5 language mode
     SWIFT_DEFAULT_ACTOR_ISOLATION: nonisolated # Xcode 26+ templates default to MainActor, which breaks the nonisolated helpers
     MACOSX_DEPLOYMENT_TARGET: "15.0"
-    MARKETING_VERSION: "0.8.5.1"
-    CURRENT_PROJECT_VERSION: "0080511"
+    MARKETING_VERSION: "0.8.5.2"
+    CURRENT_PROJECT_VERSION: "0080517"
 targets:
   Postwoman:
     type: application

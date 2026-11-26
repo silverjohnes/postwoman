@@ -93,7 +93,7 @@ struct RequestEditor: View {
             }
             HStack {
                 Picker("", selection: $node.method) { ForEach(["GET", "POST", "PUT", "PATCH", "DELETE", "HEAD", "OPTIONS"], id: \.self) { Text($0) } }.frame(width: 110).labelsHidden()
-                VarField(text: $node.url, placeholder: L("URL"), mono: true, autofocus: node.uiFocusURL, onBeginEditing: { showResult = false }).frame(maxWidth: .infinity).frame(height: 24)
+                VarField(text: $node.url, placeholder: L("URL"), mono: true, autofocus: node.uiFocusURL, pathSelect: true, onBeginEditing: { showResult = false }).frame(maxWidth: .infinity).frame(height: 24)
                 Button("Run") { store.run() }.buttonStyle(.borderedProminent)
             }
             HStack {
@@ -134,7 +134,7 @@ struct RequestEditor: View {
                 }
             }
             AuthBanner(node: node)
-            HeadersEditor(items: $node.headers, auto: node.autoHeaders(effective: Node.merge(inh.map(\.h), node.headers)),
+            HeadersEditor(items: $node.headers, memoKey: node.stableID + ":headers", auto: node.autoHeaders(effective: Node.merge(inh.map(\.h), node.headers)),
                           removed: node.disabledAuto.sorted(),
                           onRemoveAuto: { node.disabledAuto.insert($0.lowercased()) }, onRestoreAuto: { node.disabledAuto.remove($0.lowercased()) })
         }
@@ -163,8 +163,8 @@ struct RequestEditor: View {
             }
             switch node.bodyMode {
             case "none": Placeholder("This request does not have a body")
-            case "formdata": FormEditor(rows: $node.formData)
-            case "urlencoded": HeadersEditor(items: $node.urlencoded, addTitle: "Add field")
+            case "formdata": FormEditor(rows: $node.formData, memoKey: node.stableID + ":form")
+            case "urlencoded": HeadersEditor(items: $node.urlencoded, memoKey: node.stableID + ":urlencoded", addTitle: "Add field")
             case "raw": FoundEditor(text: $node.body, syntax: node.rawLang == "json" ? .json : node.rawLang == "javascript" ? .javascript : .plain, autofocus: node.uiRefocus)
             case "binary": binaryPane
             default: Placeholder("This body type is kept as imported and cannot be edited here")
@@ -201,7 +201,7 @@ struct RequestEditor: View {
 
     var paramsTab: some View {
         VStack(alignment: .leading, spacing: 6) {
-            HeadersEditor(items: $node.params, addTitle: "Add parameter")
+            HeadersEditor(items: $node.params, memoKey: node.stableID + ":params", addTitle: "Add parameter")
         }
     }
     func beautify() {
@@ -276,8 +276,64 @@ struct JSONStatus: View {
     }
 }
 
+/// Width of the "name" column in the key / value tables: fitted to the longest name by default; dragged by hand it is remembered per request and table.
+enum KeyColumn {
+    private static let storeKey = "kvKeyWidths"
+    static func saved(_ id: String?) -> Double? {
+        guard let id else { return nil }
+        return (UserDefaults.standard.dictionary(forKey: storeKey) as? [String: Double])?[id]
+    }
+    static func save(_ id: String?, _ w: Double?) {
+        guard let id else { return }
+        var d = (UserDefaults.standard.dictionary(forKey: storeKey) as? [String: Double]) ?? [:]
+        d[id] = w
+        UserDefaults.standard.set(d, forKey: storeKey)
+    }
+    static func fit(_ keys: [String]) -> Double {
+        let f = NSFont.systemFont(ofSize: NSFont.systemFontSize)
+        let longest = keys.map { ($0 as NSString).size(withAttributes: [.font: f]).width }.max() ?? 0
+        return min(400, max(120, Double(longest) + 28))
+    }
+}
+
+/// The thin bar between the name and the value field: drag to resize the name column (AppKit mouse tracking, so it works inside a List),
+/// double-click = fit to the longest name again.
+struct ColumnGrip: NSViewRepresentable {
+    @Binding var width: Double
+    var onEnd: () -> Void
+    var onReset: () -> Void
+    func makeNSView(context: Context) -> GripView { GripView() }
+    func updateNSView(_ v: GripView, context: Context) {
+        let w = _width
+        v.getWidth = { w.wrappedValue }; v.setWidth = { w.wrappedValue = $0 }; v.onEnd = onEnd; v.onReset = onReset
+    }
+    final class GripView: NSView {
+        var getWidth: () -> Double = { 0 }, setWidth: (Double) -> Void = { _ in }, onEnd: () -> Void = {}, onReset: () -> Void = {}
+        private var startX: CGFloat = 0, startW = 0.0
+        override var mouseDownCanMoveWindow: Bool { false }
+        override var intrinsicContentSize: NSSize { NSSize(width: 7, height: 20) }
+        override func resetCursorRects() { addCursorRect(bounds, cursor: .resizeLeftRight) }
+        override func draw(_ r: NSRect) {
+            NSColor.secondaryLabelColor.withAlphaComponent(0.35).setFill()
+            NSRect(x: bounds.midX - 0.5, y: 1, width: 1, height: bounds.height - 2).fill()
+        }
+        override func mouseDown(with e: NSEvent) {
+            if e.clickCount == 2 { onReset(); return }
+            startX = e.locationInWindow.x; startW = getWidth()
+        }
+        override func mouseDragged(with e: NSEvent) { setWidth(max(70, startW + Double(e.locationInWindow.x - startX))) }
+        override func mouseUp(with e: NSEvent) { if e.clickCount < 2 { onEnd() } }
+    }
+}
+
 struct HeadersEditor: View {
     @Binding var items: [KV]
+    var memoKey: String? = nil                // where the name column width is remembered (request id + table)
+    @State private var manual: Double?
+    @State private var autoW = 160.0
+    @State private var viewW = 800.0
+    private var keyW: Double { manual ?? autoW }
+    private var maxKeyW: Double { max(120, viewW - 240) }          // the value field always keeps some room
     var addTitle = "Add header"
     var auto: [KV] = []                       // read-only rows added by the runtime
     var removed: [String] = []                // auto headers the user removed: they are not sent and not listed, only offered for restoring
@@ -288,7 +344,11 @@ struct HeadersEditor: View {
             ForEach($items) { $h in
                 HStack {
                     Toggle("", isOn: $h.enabled).labelsHidden()
-                    VarField(text: $h.key, placeholder: L("Key")).frame(height: 24); VarField(text: $h.value, placeholder: L("Value")).frame(height: 24)
+                    HStack(spacing: 2) {         // the bar sits only a little wider than its grab area
+                        VarField(text: $h.key, placeholder: L("Key")).frame(width: min(keyW, maxKeyW), height: 24)
+                        ColumnGrip(width: Binding(get: { min(keyW, maxKeyW) }, set: { manual = min($0, maxKeyW) }), onEnd: { KeyColumn.save(memoKey, manual) }, onReset: { manual = nil; KeyColumn.save(memoKey, nil) }).frame(width: 7, height: 20)
+                        VarField(text: $h.value, placeholder: L("Value")).frame(height: 24)
+                    }
                     Button { items.removeAll { $0.id == h.id } } label: { Image(systemName: "minus.circle") }.buttonStyle(.borderless)
                 }
             }
@@ -321,18 +381,30 @@ struct HeadersEditor: View {
                     .menuStyle(.borderlessButton).fixedSize()
             }
         }
+        .onGeometryChange(for: Double.self) { Double($0.size.width) } action: { viewW = $0 }
+        .onAppear { manual = KeyColumn.saved(memoKey); autoW = KeyColumn.fit(items.map(\.key)) }
+        .onChange(of: items.count) { autoW = KeyColumn.fit(items.map(\.key)) }
     }
 }
 
 // MARK: form-data editor: text fields and files
 struct FormEditor: View {
     @Binding var rows: [FormRow]
+    var memoKey: String? = nil
+    @State private var manual: Double?
+    @State private var autoW = 160.0
+    @State private var viewW = 800.0
+    private var keyW: Double { manual ?? autoW }
+    private var maxKeyW: Double { max(120, viewW - 240) }          // the value field always keeps some room
     var body: some View {
         List {
             ForEach($rows) { $r in
                 HStack {
                     Toggle("", isOn: $r.enabled).labelsHidden()
-                    VarField(text: $r.key, placeholder: L("Key")).frame(height: 24)
+                    HStack(spacing: 2) {
+                        VarField(text: $r.key, placeholder: L("Key")).frame(width: min(keyW, maxKeyW), height: 24)
+                        ColumnGrip(width: Binding(get: { min(keyW, maxKeyW) }, set: { manual = min($0, maxKeyW) }), onEnd: { KeyColumn.save(memoKey, manual) }, onReset: { manual = nil; KeyColumn.save(memoKey, nil) }).frame(width: 7, height: 20)
+                    }.padding(.trailing, -4)
                     Picker("", selection: $r.isFile) { Text("Text").tag(false); Text("File").tag(true) }.labelsHidden().frame(width: 80)
                     if r.isFile {
                         Text(r.src.isEmpty ? L("No file selected") : (r.src as NSString).lastPathComponent)
@@ -346,6 +418,9 @@ struct FormEditor: View {
             }
             Button("Add field") { rows.append(FormRow()) }
         }
+        .onGeometryChange(for: Double.self) { Double($0.size.width) } action: { viewW = $0 }
+        .onAppear { manual = KeyColumn.saved(memoKey); autoW = KeyColumn.fit(rows.map(\.key)) }
+        .onChange(of: rows.count) { autoW = KeyColumn.fit(rows.map(\.key)) }
     }
 }
 

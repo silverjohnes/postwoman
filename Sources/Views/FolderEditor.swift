@@ -18,7 +18,7 @@ struct FolderEditor: View {
             if mode == 0 {
                 Text("Applied automatically to every nested request and shown there as read-only. A request's own header with the same name overrides it. When exporting, they are written into each request.")
                     .font(.caption).foregroundStyle(.secondary)
-                HeadersEditor(items: $node.folderHeaders)
+                HeadersEditor(items: $node.folderHeaders, memoKey: node.stableID + ":folder")
             } else { BulkEditor(embedded: true) }
         }.padding()
     }

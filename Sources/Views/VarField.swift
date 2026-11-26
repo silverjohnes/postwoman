@@ -8,6 +8,7 @@ struct VarField: NSViewRepresentable {
     var placeholder = ""
     var mono = false
     var autofocus = false
+    var pathSelect = false                         // URL field: triple click selects the part between "/" and "/", four clicks the whole address
     var onBeginEditing: (() -> Void)? = nil        // the user clicked into the field or started typing (not a programmatic focus)
 
     final class Coord: NSObject, NSTextFieldDelegate {
@@ -53,6 +54,7 @@ struct VarField: NSViewRepresentable {
     func updateNSView(_ f: NSTextField, context: Context) {
         let c = context.coordinator
         c.parent = self
+        (f.cell as? SurroundCell)?.pathSelect = pathSelect
         (f as? SurroundTextField)?.onClick = { [weak c] in c?.parent.onBeginEditing?() }
         if f.stringValue != text { f.stringValue = text; c.restyle(f) }
         else if c.known != Highlighter.known { c.restyle(f) }
